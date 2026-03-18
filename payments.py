@@ -15,7 +15,6 @@ from aiogram.enums import ParseMode
 
 from dotenv import load_dotenv
 
-# База данных
 try:
     from database import (
         save_deposit, save_withdrawal, update_user_info,
@@ -44,7 +43,6 @@ except Exception as _leaders_import_err:
 
 load_dotenv()
 
-# Настройки Cryptobot
 CRYPTO_BOT_TOKEN = os.getenv('CRYPTO_BOT_TOKEN')
 CRYPTOBOT_API_URL = "https://pay.crypt.bot/api"
 
@@ -52,34 +50,26 @@ if not CRYPTO_BOT_TOKEN:
     logging.critical("CRITICAL: CRYPTO_BOT_TOKEN не найден в переменных окружения!")
     raise ValueError("CRYPTO_BOT_TOKEN не найден в переменных окружения!")
 
-# Минимальные суммы
 MIN_DEPOSIT    = 0.1
 MIN_WITHDRAWAL = 2.0
 
-# Задержка между выводами (3 минуты)
 WITHDRAWAL_COOLDOWN = 180
 
-# Время жизни счета (5 минут)
 INVOICE_LIFETIME = 300
 
-# Эмодзи
 EMOJI_BACK = "5906771962734057347"
 EMOJI_LINK = "5271604874419647061"
 
-# Администраторы — те кто могут одобрять/отклонять заявки
 ADMIN_IDS = [int(x) for x in os.getenv('ADMIN_IDS', '8118184388,8158265201').split(',') if x.strip()]
 
 payment_router = Router()
 bot: Bot = None
 
-# Функции владельца сообщений — инжектируются из main.py
 set_owner_fn = None
 is_owner_fn  = None
 
 
-# ========== ХРАНИЛИЩЕ ЗАЯВОК НА ВЫВОД ==========
 class WithdrawRequest:
-    """Одна заявка на вывод."""
     def __init__(self, req_id: int, user_id: int, username: str,
                  first_name: str, amount: float):
         self.req_id     = req_id
@@ -88,10 +78,9 @@ class WithdrawRequest:
         self.first_name = first_name
         self.amount     = amount
         self.created_at = datetime.now()
-        self.status     = 'pending'   # pending | approved | rejected
+        self.status     = 'pending'
 
 class WithdrawQueue:
-    """Очередь заявок на вывод."""
     def __init__(self):
         self._requests: Dict[int, WithdrawRequest] = {}
         self._counter  = 0
@@ -115,7 +104,6 @@ class WithdrawQueue:
 withdraw_queue = WithdrawQueue()
 
 
-# ========== ХРАНИЛИЩЕ ==========
 class Storage:
     def __init__(self):
         self.users: Dict[int, dict] = {}
@@ -334,7 +322,6 @@ class Storage:
 storage = Storage()
 
 
-# ========== ВСПОМОГАТЕЛЬНЫЕ ==========
 def btn_back_profile() -> InlineKeyboardButton:
     return InlineKeyboardButton(
         text="Назад",
@@ -355,7 +342,6 @@ def _get_user_display_name(user_data: dict, user_id: int) -> str:
     return f"User {user_id}"
 
 
-# ========== API CRYPTOBOT ==========
 class CryptoBotAPI:
     def __init__(self, token: str):
         self.token   = token
@@ -446,7 +432,6 @@ class CryptoBotAPI:
 crypto_api = CryptoBotAPI(CRYPTO_BOT_TOKEN)
 
 
-# ========== ФОНОВАЯ ПРОВЕРКА ОПЛАТЫ ==========
 async def check_payment_task(invoice_id: str):
     try:
         for wait in range(10):
@@ -532,7 +517,6 @@ async def check_payment_task(invoice_id: str):
             del storage.check_tasks[invoice_id]
 
 
-# ========== ХЕНДЛЕР ДЕП ==========
 _DEP_RE = _re.compile(
     r'^/?(?:деп|пополнить|депозит|dep|deposit)\s+(\d+(?:\.\d+)?)$',
     _re.IGNORECASE
@@ -551,7 +535,6 @@ async def handle_dep_command(message: Message):
     await _process_deposit(message, message.from_user.id, amount_override=amount)
 
 
-# ========== ХЕНДЛЕР ВВОДА СУММЫ ==========
 @payment_router.message(F.text.regexp(r'^\d+\.?\d*$'))
 async def handle_amount_input(message: Message):
     user_id = message.from_user.id
@@ -564,7 +547,6 @@ async def handle_amount_input(message: Message):
         await _process_withdraw(message, user_id)
 
 
-# ========== ПОПОЛНЕНИЕ ==========
 async def _process_deposit(message: Message, user_id: int, amount_override: float = None):
     try:
         amount = amount_override if amount_override is not None else float(message.text)
@@ -624,7 +606,6 @@ async def _process_deposit(message: Message, user_id: int, amount_override: floa
         await message.answer('❌ Введите число')
 
 
-# ========== ВЫВОД — СОЗДАНИЕ ЗАЯВКИ ==========
 async def _process_withdraw(message: Message, user_id: int):
     try:
         amount  = float(message.text)
@@ -661,7 +642,6 @@ async def _process_withdraw(message: Message, user_id: int):
             )
             return
 
-        # Списываем баланс сразу при создании заявки
         user_lock = storage.get_user_lock(user_id)
         async with user_lock:
             if storage.get_balance(user_id) < amount:
@@ -680,11 +660,9 @@ async def _process_withdraw(message: Message, user_id: int):
 
         storage.set_last_withdrawal(user_id)
 
-        # Сохраняем имя/юзернейм
         username   = message.from_user.username or ''
         first_name = message.from_user.first_name or ''
 
-        # Добавляем заявку в очередь
         req_id = withdraw_queue.add(user_id, username, first_name, amount)
 
         user_data = storage.get_user(user_id)
@@ -692,7 +670,6 @@ async def _process_withdraw(message: Message, user_id: int):
         record_withdrawal_stat(user_id, user_name, amount)
         asyncio.create_task(save_withdrawal(user_id, amount))
 
-        # Уведомляем пользователя
         await message.answer(
             f'<blockquote><tg-emoji emoji-id="5312441427764989435">💰</tg-emoji> <b>Заявка на вывод создана!</b></blockquote>\n\n'
             f'<blockquote>'
@@ -706,17 +683,11 @@ async def _process_withdraw(message: Message, user_id: int):
         )
 
 
-
     except ValueError:
         await message.answer('❌ Введите число')
 
 
-# ========== ВСПОМОГАТЕЛЬНАЯ: одобрить одну заявку ==========
 async def _approve_request(req: WithdrawRequest) -> tuple:
-    """
-    Создаёт чек и отправляет пользователю.
-    Возвращает (успех, сообщение_для_админа).
-    """
     if req.status != 'pending':
         return False, f'Заявка #{req.req_id} уже обработана (статус: {req.status})'
 
@@ -727,7 +698,6 @@ async def _approve_request(req: WithdrawRequest) -> tuple:
 
     req.status = 'approved'
 
-    # Отправляем чек пользователю
     try:
         await bot.send_message(
             req.user_id,
@@ -748,17 +718,12 @@ async def _approve_request(req: WithdrawRequest) -> tuple:
     return True, f'✅ Заявка #{req.req_id} одобрена | {display} | {req.amount} USDT'
 
 
-# ========== ВСПОМОГАТЕЛЬНАЯ: отклонить одну заявку ==========
 async def _approve_request(req: WithdrawRequest) -> tuple:
-    """
-    Отклоняет заявку. Баланс НЕ возвращается.
-    """
     if req.status != 'pending':
         return False, f'Заявка #{req.req_id} уже обработана (статус: {req.status})'
 
     req.status = 'rejected'
 
-    # Уведомляем пользователя
     try:
         await bot.send_message(
             req.user_id,
@@ -777,7 +742,6 @@ async def _approve_request(req: WithdrawRequest) -> tuple:
     return True, f'🚫 Заявка #{req.req_id} отклонена | {display} | {req.amount} USDT'
 
 
-# ========== АДМИН: /checkw — список заявок ==========
 _CHECKW_RE = _re.compile(r'^/checkw$', _re.IGNORECASE)
 
 @payment_router.message(F.text.regexp(_CHECKW_RE))
@@ -812,7 +776,6 @@ async def handle_checkw(message: Message):
     await message.reply(text, parse_mode='HTML')
 
 
-# ========== АДМИН: /type #N или /type all ==========
 _TYPE_RE = _re.compile(r'^/type\s+(?:#(\d+)|(all))$', _re.IGNORECASE)
 
 @payment_router.message(F.text.regexp(_TYPE_RE))
@@ -846,7 +809,6 @@ async def handle_type(message: Message):
         await message.reply(f'<blockquote>{msg}</blockquote>', parse_mode='HTML')
 
 
-# ========== АДМИН: /reject #N или /reject all ==========
 _REJECT_RE = _re.compile(r'^/reject\s+(?:#(\d+)|(all))$', _re.IGNORECASE)
 
 @payment_router.message(F.text.regexp(_REJECT_RE))
@@ -880,7 +842,6 @@ async def handle_reject(message: Message):
         await message.reply(f'<blockquote>{msg}</blockquote>', parse_mode='HTML')
 
 
-# ========== КАЗНА ==========
 _KAZNA_RE = _re.compile(r'^/?(?:казна|kazna|reserve)$', _re.IGNORECASE)
 
 @payment_router.message(F.text.regexp(_KAZNA_RE))
@@ -931,7 +892,6 @@ async def handle_kazna(message: Message):
     )
 
 
-# ========== ИНИЦИАЛИЗАЦИЯ ==========
 def setup_payments(bot_instance: Bot):
     global bot
     bot = bot_instance
