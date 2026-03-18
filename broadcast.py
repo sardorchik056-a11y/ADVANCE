@@ -1,16 +1,3 @@
-"""
-broadcast.py — Рассылка сообщений всем пользователям.
-
-Команда: /reck [текст]
-Только для администраторов.
-
-Особенности:
-  - Поддерживает HTML-форматирование (<b>, <i>, <code>, <blockquote> и т.д.)
-  - Поддерживает премиум кастомные эмодзи: <tg-emoji emoji-id="...">🎰</tg-emoji>
-  - Рассылает с задержкой 0.05 сек между сообщениями (не попасть под лимиты TG)
-  - После рассылки показывает статистику: отправлено / заблокировали / ошибок
-  - Поддерживает /reck cancel — отмена текущей рассылки
-"""
 
 import asyncio
 import logging
@@ -24,17 +11,14 @@ except ImportError:
     def db_get_all_user_ids() -> list:
         return []
 
-# Задержка между отправками (сек) — не больше 20 msg/sec по правилам Telegram
 BROADCAST_DELAY = 0.05
 
-# Задержка при ошибке flood (сек)
 FLOOD_WAIT_EXTRA = 2
 
 ADMIN_IDS = [8118184388, 8158265201]
 
 broadcast_router = Router()
 
-# Флаг активной рассылки (только одна одновременно)
 _active_broadcast: asyncio.Task | None = None
 
 
@@ -53,7 +37,6 @@ async def _do_broadcast(bot: Bot, admin_id: int, text: str):
         )
         return
 
-    # Уведомляем админа о начале
     await bot.send_message(
         admin_id,
         f"<blockquote>📣 <b>Рассылка начата</b>\n\n"
@@ -68,7 +51,6 @@ async def _do_broadcast(bot: Bot, admin_id: int, text: str):
     cancelled = False
 
     for user_id in user_ids:
-        # Проверяем не отменили ли рассылку
         if asyncio.current_task().cancelled():
             cancelled = True
             break
@@ -111,7 +93,6 @@ async def _do_broadcast(bot: Bot, admin_id: int, text: str):
 
         await asyncio.sleep(BROADCAST_DELAY)
 
-    # Итоговый отчёт
     status = "⛔️ Отменена" if cancelled else "✅ Завершена"
     await bot.send_message(
         admin_id,
@@ -133,7 +114,6 @@ async def cmd_reck(message: Message):
     if message.from_user.id not in ADMIN_IDS:
         return
 
-    # ── /reck cancel — отмена рассылки ───────────────────────────
     text_raw = message.text.strip()
     if text_raw.lower() in ("/reck cancel", "/reck отмена"):
         if _active_broadcast and not _active_broadcast.done():
@@ -149,7 +129,6 @@ async def cmd_reck(message: Message):
             )
         return
 
-    # ── Получаем текст сообщения ──────────────────────────────────
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2 or not parts[1].strip():
         await message.answer(
@@ -169,7 +148,6 @@ async def cmd_reck(message: Message):
 
     broadcast_text = parts[1].strip()
 
-    # ── Проверяем нет ли уже активной рассылки ───────────────────
     if _active_broadcast and not _active_broadcast.done():
         await message.answer(
             "<blockquote>⚠️ <b>Рассылка уже идёт!</b>\n\n"
@@ -178,12 +156,10 @@ async def cmd_reck(message: Message):
         )
         return
 
-    # ── Предпросмотр + запуск ─────────────────────────────────────
     await message.answer(
         "<blockquote>👁 <b>Предпросмотр сообщения:</b></blockquote>",
         parse_mode=ParseMode.HTML
     )
-    # Показываем как будет выглядеть сообщение
     try:
         await message.answer(broadcast_text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
     except Exception as e:
@@ -194,7 +170,6 @@ async def cmd_reck(message: Message):
         )
         return
 
-    # Запускаем рассылку фоновой задачей
     _active_broadcast = asyncio.create_task(
         _do_broadcast(message.bot, message.from_user.id, broadcast_text)
     )
