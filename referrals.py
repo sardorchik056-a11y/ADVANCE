@@ -9,7 +9,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.enums import ParseMode
 
-# База данных
 try:
     from database import save_referral_commission, save_referral_withdrawal, register_referral as db_register_referral
 except ImportError:
@@ -17,16 +16,10 @@ except ImportError:
     async def save_referral_withdrawal(user_id, amount): pass
     async def db_register_referral(new_user_id, referrer_id): pass
 
-# ──────────────────────────────────────────────
-#  НАСТРОЙКИ
-# ──────────────────────────────────────────────
 REFERRAL_PERCENT   = 2
 MIN_REF_WITHDRAWAL = 1.0
 REFERRALS_FILE     = "referrals.json"
 
-# ──────────────────────────────────────────────
-#  EMOJI
-# ──────────────────────────────────────────────
 EMOJI_PARTNERS   = "5906986955911993888"
 EMOJI_BACK       = "5906771962734057347"
 EMOJI_WALLET     = "5445355530111437729"
@@ -36,19 +29,13 @@ EMOJI_STATS      = "5231200819986047254"
 EMOJI_COIN       = "5197434882321567830"
 EMOJI_CHECK      = "5197269100878907942"
 EMOJI_NUMBER     = "5271604874419647061"
-EMOJI_REF_USER   = "5906581476639513176"   # замени на нужный
+EMOJI_REF_USER   = "5906581476639513176"
 
 
-# ──────────────────────────────────────────────
-#  FSM
-# ──────────────────────────────────────────────
 class ReferralWithdraw(StatesGroup):
     entering_amount = State()
 
 
-# ──────────────────────────────────────────────
-#  ХРАНИЛИЩЕ РЕФЕРАЛОВ
-# ──────────────────────────────────────────────
 class ReferralStorage:
     def __init__(self, filepath: str = REFERRALS_FILE):
         self.filepath = filepath
@@ -81,22 +68,14 @@ class ReferralStorage:
                 "total_earned":    0.0,
                 "total_withdrawn": 0.0,
                 "join_date":       datetime.now().strftime("%Y-%m-%d"),
-                # joined_organically=True означает что юзер пришёл сам,
-                # без реф-ссылки — он навсегда заблокирован от реф-системы
                 "joined_organically": False,
             }
             self._save()
         return self._data[key]
 
     def mark_organic(self, user_id: int):
-        """
-        Вызывается из main.py когда /start пришёл БЕЗ реф-параметра.
-        Если запись уже есть — ничего не меняем (юзер уже был зарегистрирован).
-        Если записи нет — создаём с флагом joined_organically=True.
-        """
         key = str(user_id)
         if key not in self._data:
-            # Первый визит, без реф-ссылки — помечаем навсегда
             self._data[key] = {
                 "referrer_id":        None,
                 "referrals":          [],
@@ -110,29 +89,22 @@ class ReferralStorage:
             logging.info(f"[Referral] {user_id} пришёл без реф-ссылки → заблокирован от реф-системы")
 
     def register_referral(self, new_user_id: int, referrer_id: int) -> bool:
-        # 1. Нельзя быть рефералом самого себя
         if new_user_id == referrer_id:
             logging.info(f"[Referral] {new_user_id} попытался стать рефералом самого себя")
             return False
 
         key = str(new_user_id)
 
-        # 2. Если юзер уже есть в базе — проверяем только что он не чей-то реферал уже
         if key in self._data:
             record = self._data[key]
 
-            # Уже чей-то реферал — запрещаем
             if record.get("referrer_id") is not None:
                 logging.info(f"[Referral] {new_user_id} уже является рефералом {record['referrer_id']}")
                 return False
 
-            # УБРАНА блокировка по joined_organically:
-            # если пользователь пришёл без ссылки, но теперь зашёл по ссылке — разрешаем
 
-        # 3. Реферера НЕ обязательно иметь в базе — создаём запись если нет
         referrer_key = str(referrer_id)
         if referrer_key not in self._data:
-            # Создаём минимальную запись реферера
             self._data[referrer_key] = {
                 "referrer_id":        None,
                 "referrals":          [],
@@ -146,12 +118,10 @@ class ReferralStorage:
 
         referrer_record = self._data[referrer_key]
 
-        # 4. Защита от дублей в списке рефералов реферера
         if new_user_id in referrer_record["referrals"]:
             logging.info(f"[Referral] {new_user_id} уже в списке рефералов {referrer_id}")
             return False
 
-        # 5. Регистрируем
         record = self._get(new_user_id)
         record["referrer_id"]        = referrer_id
         record["joined_organically"] = False
@@ -199,13 +169,9 @@ class ReferralStorage:
         return self._get(user_id)["referrer_id"]
 
 
-# ──────────────────────────────────────────────
-#  ГЛОБАЛЬНЫЙ ЭКЗЕМПЛЯР
-# ──────────────────────────────────────────────
 referral_storage = ReferralStorage()
 _bot = None
 
-# Функции владельца — инжектируются из main.py при старте
 def _noop_set_owner(message_id: int, user_id: int): pass
 def _noop_is_owner(message_id: int, user_id: int) -> bool: return True
 set_owner_fn = _noop_set_owner
@@ -217,9 +183,6 @@ def setup_referrals(bot: Bot):
     _bot = bot
 
 
-# ──────────────────────────────────────────────
-#  УТИЛИТЫ
-# ──────────────────────────────────────────────
 def get_referral_link(user_id: int) -> str:
     bot_username = os.getenv("BOT_USERNAME", "YourBotUsername")
     return f"https://t.me/{bot_username}?start=ref_{user_id}"
@@ -229,9 +192,6 @@ def e(eid: str, fallback: str = "•") -> str:
     return f'<tg-emoji emoji-id="{eid}">{fallback}</tg-emoji>'
 
 
-# ──────────────────────────────────────────────
-#  КЛАВИАТУРЫ
-# ──────────────────────────────────────────────
 def kb_referrals_main() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -283,9 +243,6 @@ def kb_ref_cancel() -> InlineKeyboardMarkup:
     ]])
 
 
-# ──────────────────────────────────────────────
-#  ТЕКСТЫ
-# ──────────────────────────────────────────────
 def text_referrals_main(user_id: int) -> str:
     stats = referral_storage.get_stats(user_id)
     link  = get_referral_link(user_id)
@@ -356,9 +313,6 @@ def text_ref_link(user_id: int) -> str:
     )
 
 
-# ──────────────────────────────────────────────
-#  ХЕНДЛЕРЫ
-# ──────────────────────────────────────────────
 referral_router = Router()
 
 
@@ -425,7 +379,6 @@ async def ref_withdraw_start(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-# ── Вызывается напрямую из main.py (handle_text_message) ──
 async def ref_withdraw_amount(message: Message, state: FSMContext):
     try:
         amount = float(message.text.replace(",", ".").strip())
@@ -464,10 +417,8 @@ async def ref_withdraw_amount(message: Message, state: FSMContext):
         )
         return
 
-    # Сохраняем вывод реф-баланса в БД
     asyncio.create_task(save_referral_withdrawal(message.from_user.id, amount))
 
-    # Зачисляем на основной игровой баланс
     try:
         from payments import storage as pay_storage
         pay_storage.add_balance(message.from_user.id, amount)
@@ -498,22 +449,15 @@ async def ref_withdraw_amount_handler(message: Message, state: FSMContext):
     await ref_withdraw_amount(message, state)
 
 
-# ──────────────────────────────────────────────
-#  ХЕЛПЕР: начисление комиссии — тихо, без уведомлений
-# ──────────────────────────────────────────────
 async def notify_referrer_commission(referral_user_id: int, bet_amount: float):
     commission = referral_storage.accrue_commission(referral_user_id, bet_amount)
     if commission > 0:
         logging.info(f"[Referral] Комиссия {commission} USDT начислена тихо рефереру")
-        # Сохраняем комиссию в БД
         referrer_id = referral_storage.get_referrer_id(referral_user_id)
         if referrer_id:
             asyncio.create_task(save_referral_commission(referrer_id, referral_user_id, commission))
 
 
-# ──────────────────────────────────────────────
-#  ХЕЛПЕР: обработка /start ref_XXXXXX
-# ──────────────────────────────────────────────
 async def process_start_referral(message: Message, start_param: str) -> bool:
     if not start_param.startswith("ref_"):
         return False
@@ -526,7 +470,6 @@ async def process_start_referral(message: Message, start_param: str) -> bool:
     registered  = referral_storage.register_referral(new_user_id, referrer_id)
 
     if registered:
-        # Сохраняем связь реферал → реферер в БД
         asyncio.create_task(db_register_referral(new_user_id, referrer_id))
 
     if registered and _bot is not None:
