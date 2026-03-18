@@ -8,37 +8,32 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.enums import ParseMode
 
-# База данных
 try:
     from database import save_game_result as db_save_game_result, update_balance as db_update_balance
 except ImportError:
     async def db_save_game_result(user_id, game_name, score): pass
     async def db_update_balance(user_id, amount): return None
 
-# Реферальная система
 try:
     from referrals import notify_referrer_commission
 except ImportError:
     async def notify_referrer_commission(user_id: int, bet_amount: float):
         pass
 
-# Модуль лидеров
 try:
     from leaders import record_game_result
 except ImportError:
     def record_game_result(user_id, name, bet, win):
         pass
 
-# ========== EMOJI IDS ==========
 EMOJI_BACK   = "5906771962734057347"
 EMOJI_GOAL   = "5206607081334906820"
 EMOJI_3POINT = "5397782960512444700"
 EMOJI_NUMBER = "5456140674028019486"
 
-GRID_SIZE = 5  # 5x5 = 25 клеток
-INACTIVITY_TIMEOUT = 300  # 5 минут в секундах
+GRID_SIZE = 5
+INACTIVITY_TIMEOUT = 300
 
-# ========== СКРЫТЫЕ МИНЫ ==========
 HIDDEN_MINES = {
     2: 1, 3: 1, 4: 2, 5: 2, 6: 2, 7: 2, 8: 2, 9: 2, 10: 2,
     11: 3, 12: 3, 13: 3, 14: 3, 15: 3, 16: 3,
@@ -51,7 +46,6 @@ CELL_GEM     = "💎"
 CELL_MINE    = "💣"
 CELL_EXPLODE = "💥"
 
-# ========== МНОЖИТЕЛИ ==========
 MINES_MULTIPLIERS = {
     2:  [1.08, 1.22, 1.36, 1.52, 1.71, 1.93, 2.19, 2.50, 2.87, 3.32, 3.87, 4.55, 5.39, 6.45, 7.80, 9.55, 11.85, 14.95, 19.25, 25.25, 33.75, 55.75, 83.25],
     3:  [1.15, 1.33, 1.55, 1.82, 2.15, 2.56, 3.07, 3.72, 4.55, 5.62, 7.02, 8.87, 11.35, 14.70, 25.30, 36.70, 49.80, 79.10, 99.80, 137.50, 195.00, 415.00],
@@ -79,81 +73,64 @@ MINES_MULTIPLIERS = {
 }
 
 
-# ========== FSM ==========
 class MinesGame(StatesGroup):
     choosing_bet = State()
     playing      = State()
 
 
 mines_router = Router()
-_sessions: dict      = {}   # user_id -> session dict
-_timeout_tasks: dict = {}   # user_id -> asyncio.Task
+_sessions: dict      = {}
+_timeout_tasks: dict = {}
 
-# Функции владельца — инжектируются из main.py при старте
 def _noop_set_owner(message_id: int, user_id: int): pass
 def _noop_is_owner(message_id: int, user_id: int) -> bool: return True
 set_owner_fn = _noop_set_owner
 is_owner_fn  = _noop_is_owner
 
-# ========== ЗАЩИТА ОТ ДУБЛЕЙ ==========
-# Локи на пользователя — предотвращают race condition при одновременных нажатиях
-_user_locks: dict = {}          # user_id -> asyncio.Lock
-# Обработанные клетки в текущей сессии хранятся прямо в session['processing_cells']
-# Кэшауты/завершения игры — флаг в session['finishing']
-# Ставки в процессе создания — предотвращают двойную ставку
-_bet_locks: dict    = {}        # user_id -> asyncio.Lock — для создания ставки
-_last_owner: dict   = {}        # user_id -> int — владелец последней игры (для post-game кнопок)
-_bet_in_progress: set = set()   # user_id — ставка сейчас обрабатывается
-_game_board_owner: dict = {}    # message_id -> owner_id — надёжная привязка доски к игроку
+_user_locks: dict = {}
+_bet_locks: dict    = {}
+_last_owner: dict   = {}
+_bet_in_progress: set = set()
+_game_board_owner: dict = {}
 
 
 def _get_user_lock(user_id: int) -> asyncio.Lock:
-    """Возвращает персональный локер для пользователя."""
     if user_id not in _user_locks:
         _user_locks[user_id] = asyncio.Lock()
     return _user_locks[user_id]
 
 
 def _get_bet_lock(user_id: int) -> asyncio.Lock:
-    """Возвращает локер для создания ставки."""
     if user_id not in _bet_locks:
         _bet_locks[user_id] = asyncio.Lock()
     return _bet_locks[user_id]
 
 
 def _check_owner(callback_user_id: int, session: dict) -> bool:
-    """Проверяет что нажавший кнопку — владелец игры."""
     owner = session.get('owner_id', 0)
     return owner == 0 or callback_user_id == owner
 
 
 def _check_post_game_owner(owner_user_id: int, callback_user_id: int) -> bool:
-    """Проверяет владельца для post-game кнопок (когда сессии уже нет)."""
     owner = _last_owner.get(owner_user_id)
-    # Если владелец неизвестен — запрещаем (не пускаем чужих)
     if owner is None:
         return False
     return callback_user_id == owner
 
 
-# ========== ТАЙМАУТ БЕЗДЕЙСТВИЯ ==========
-
 def _cancel_timeout(user_id: int):
-    """Отменяет таймер бездействия если он есть."""
     task = _timeout_tasks.pop(user_id, None)
     if task and not task.done():
         task.cancel()
 
 
 def _start_timeout(user_id: int, bot: Bot, storage):
-    """Запускает/перезапускает таймер бездействия на 5 минут."""
     _cancel_timeout(user_id)
     task = asyncio.create_task(_inactivity_watcher(user_id, bot, storage))
     _timeout_tasks[user_id] = task
 
 
 async def _inactivity_watcher(user_id: int, bot: Bot, storage):
-    """Ждёт 5 минут без активности, потом удаляет игру и возвращает ставку."""
     try:
         await asyncio.sleep(INACTIVITY_TIMEOUT)
     except asyncio.CancelledError:
@@ -165,18 +142,15 @@ async def _inactivity_watcher(user_id: int, bot: Bot, storage):
         if session is None:
             return
 
-        # Помечаем как завершённую чтобы другие обработчики не сработали
         if session.get('finishing'):
             return
         session['finishing'] = True
 
-    # Возвращаем ставку
     bet = session.get('bet', 0)
     if bet > 0:
         storage.add_balance(user_id, bet)
         logging.info(f"[mines] Таймаут user={user_id}, ставка {bet} возвращена.")
 
-    # Обновляем сообщение — «Игра закрыта»
     msg_id  = session.get('message_id')
     chat_id = session.get('chat_id')
     if msg_id and chat_id:
@@ -202,8 +176,6 @@ async def _inactivity_watcher(user_id: int, bot: Bot, storage):
         except Exception:
             pass
 
-
-# ========== ХЕЛПЕРЫ ==========
 
 def _has_active_game(user_id: int) -> bool:
     return user_id in _sessions
@@ -362,8 +334,6 @@ def game_text(session: dict) -> str:
     )
 
 
-# ========== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ СОЗДАНИЯ СЕССИИ ==========
-
 def _create_session(mines_count: int, bet: float, chat_id: int, owner_id: int = 0) -> dict:
     board, real_positions = generate_board(mines_count)
     return {
@@ -381,8 +351,6 @@ def _create_session(mines_count: int, bet: float, chat_id: int, owner_id: int = 
         'processing_cells': set(),
     }
 
-
-# ========== ПУБЛИЧНАЯ ФУНКЦИЯ ВХОДА ==========
 
 async def show_mines_menu(callback: CallbackQuery, storage, betting_game):
     user_id = callback.from_user.id
@@ -409,8 +377,6 @@ async def show_mines_menu(callback: CallbackQuery, storage, betting_game):
     set_owner_fn(callback.message.message_id, callback.from_user.id)
     await callback.answer()
 
-
-# ========== ХЕНДЛЕРЫ ==========
 
 @mines_router.callback_query(F.data.startswith("mines_select_"))
 async def mines_select_handler(callback: CallbackQuery, state: FSMContext):
@@ -495,7 +461,6 @@ async def mines_play_again(callback: CallbackQuery, state: FSMContext):
     from payments import storage as pay_storage
     caller_id  = callback.from_user.id
     msg_id     = callback.message.message_id
-    # Проверяем: нажавший должен быть владельцем ЭТОЙ игровой доски
     board_owner = _game_board_owner.get(msg_id)
     if board_owner is None or board_owner != caller_id:
         await callback.answer("🚫 Это не ваша игра!", show_alert=True)
@@ -512,13 +477,11 @@ async def mines_exit(callback: CallbackQuery, state: FSMContext):
     caller_id = callback.from_user.id
     msg_id    = callback.message.message_id
 
-    # Главная защита: только владелец этой доски может нажимать Выйти
     board_owner = _game_board_owner.get(msg_id)
     if board_owner is None or board_owner != caller_id:
         await callback.answer("🚫 Это не ваша игра!", show_alert=True)
         return
 
-    # Ищем активную сессию (если игра ещё идёт — возвращаем ставку)
     session  = _sessions.get(caller_id)
     owner_id = caller_id
 
@@ -529,7 +492,6 @@ async def mines_exit(callback: CallbackQuery, state: FSMContext):
                 pay_storage.add_balance(owner_id, bet)
         _sessions.pop(owner_id, None)
         _cancel_timeout(owner_id)
-    # Если сессии нет — post-game экран, board_owner уже проверен, просто выходим
 
     await state.clear()
     from main import get_games_menu, get_games_menu_text
@@ -553,13 +515,11 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
     msg_id    = callback.message.message_id
     idx       = int(callback.data.split("_")[-1])
 
-    # Главная защита: проверяем кто владелец ЭТОЙ доски по message_id
     board_owner = _game_board_owner.get(msg_id)
     if board_owner is None or board_owner != caller_id:
         await callback.answer("🚫 Это не ваша игра!", show_alert=True)
         return
 
-    # Ищем сессию владельца доски
     session = _sessions.get(caller_id)
     user_id = caller_id
 
@@ -567,31 +527,25 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
         await callback.answer("🚫 Игра не найдена!", show_alert=True)
         return
 
-    # Доп. проверка: сессия привязана именно к этой доске
     if session.get('message_id') != msg_id:
         await callback.answer("🚫 Это не ваша игра!", show_alert=True)
         return
 
-    # Защита: игра уже завершается
     if session.get('finishing'):
         await callback.answer()
         return
 
-    # Защита от двойного клика по одной ячейке
     if session['revealed'][idx]:
         await callback.answer("Уже открыта!")
         return
 
-    # Защита от одновременного нажатия на одну ячейку несколькими запросами
     processing = session.setdefault('processing_cells', set())
     if idx in processing:
         await callback.answer()
         return
 
-    # Берём персональный локер — предотвращает race condition
     lock = _get_user_lock(user_id)
     async with lock:
-        # Повторные проверки внутри локера (состояние могло измениться пока ждали)
         session = _sessions.get(user_id)
         if not session:
             await callback.answer("🚫 Игра уже завершена!", show_alert=True)
@@ -610,17 +564,14 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
             await callback.answer()
             return
 
-        # Помечаем ячейку как "в обработке"
         processing.add(idx)
 
     try:
-        # Есть активность — перезапускаем таймер
         _start_timeout(user_id, callback.bot, pay_storage)
 
         session['revealed'][idx] = True
 
         if session['board'][idx]:
-            # МИНА
             bet            = session['bet']
             real_positions = session.get('real_positions', set())
 
@@ -630,11 +581,9 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
                     real_positions = (real_positions - {remove_one}) | {idx}
                     session['real_positions'] = real_positions
 
-            # Атомарно помечаем как завершённую и удаляем сессию
             lock = _get_user_lock(user_id)
             async with lock:
                 if session.get('finishing'):
-                    # Уже обрабатывается другим потоком
                     return
                 session['finishing'] = True
                 _sessions.pop(user_id, None)
@@ -642,10 +591,8 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
             _cancel_timeout(user_id)
             await state.clear()
 
-            # Записываем в лидерборд: ставка в оборот, выигрыш = 0
             name = callback.from_user.first_name or callback.from_user.username or f"User {user_id}"
             record_game_result(user_id, name, bet, 0.0)
-            # Сохраняем проигрыш в БД
             asyncio.create_task(db_save_game_result(user_id, 'mines', 0.0))
 
             balance = pay_storage.get_balance(user_id)
@@ -666,7 +613,6 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
             await callback.answer("💥Мина!")
 
         else:
-            # ГЕМ
             session['gems_opened'] += 1
             gems        = session['gems_opened']
             mines_count = session['mines_count']
@@ -675,10 +621,8 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
             mult        = get_multiplier(mines_count, gems)
 
             if gems == total_safe:
-                # ПОБЕДА — открыли все безопасные клетки
                 bet      = session['bet']
 
-                # Атомарно помечаем как завершённую
                 lock = _get_user_lock(user_id)
                 async with lock:
                     if session.get('finishing'):
@@ -691,10 +635,8 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
                 _cancel_timeout(user_id)
                 await state.clear()
 
-                # Записываем в лидерборд
                 name = callback.from_user.first_name or callback.from_user.username or f"User {user_id}"
                 record_game_result(user_id, name, bet, winnings)
-                # Сохраняем выигрыш в БД
                 asyncio.create_task(db_save_game_result(user_id, 'mines', winnings))
 
                 balance = pay_storage.get_balance(user_id)
@@ -722,7 +664,6 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
                 await callback.answer(f"💎x{mult}")
 
     finally:
-        # Снимаем флаг "в обработке" с ячейки
         session = _sessions.get(user_id)
         if session:
             session.get('processing_cells', set()).discard(idx)
@@ -734,13 +675,11 @@ async def mines_cashout(callback: CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
     msg_id  = callback.message.message_id
 
-    # Главная защита: только владелец этой доски может кешаутить
     board_owner = _game_board_owner.get(msg_id)
     if board_owner is None or board_owner != user_id:
         await callback.answer("🚫 Это не ваша игра!", show_alert=True)
         return
 
-    # Берём локер — предотвращает двойной кэшаут
     lock = _get_user_lock(user_id)
     async with lock:
         session = _sessions.get(user_id)
@@ -749,12 +688,10 @@ async def mines_cashout(callback: CallbackQuery, state: FSMContext):
             await callback.answer("Игра не найдена.", show_alert=True)
             return
 
-        # Доп. проверка: сессия привязана именно к этой доске
         if session.get('message_id') != msg_id:
             await callback.answer("🚫 Это не ваша игра!", show_alert=True)
             return
 
-        # Защита от двойного кэшаута
         if session.get('finishing'):
             await callback.answer()
             return
@@ -764,7 +701,6 @@ async def mines_cashout(callback: CallbackQuery, state: FSMContext):
             await callback.answer("Сначала откройте хотя бы одну клетку!", show_alert=True)
             return
 
-        # Атомарно помечаем и удаляем сессию
         session['finishing'] = True
         _sessions.pop(user_id, None)
 
@@ -777,10 +713,8 @@ async def mines_cashout(callback: CallbackQuery, state: FSMContext):
     _cancel_timeout(user_id)
     await state.clear()
 
-    # Записываем в лидерборд
     name = callback.from_user.first_name or callback.from_user.username or f"User {user_id}"
     record_game_result(user_id, name, bet, winnings)
-    # Сохраняем кэшаут в БД
     asyncio.create_task(db_save_game_result(user_id, 'mines', winnings))
 
     balance = pay_storage.get_balance(user_id)
@@ -809,7 +743,6 @@ async def mines_cashout(callback: CallbackQuery, state: FSMContext):
     )
     set_owner_fn(callback.message.message_id, user_id)
     await callback.answer(f"💰+{winnings}!")
-
 
 
 @mines_router.callback_query(F.data == "mines_cashout_again")
@@ -843,15 +776,12 @@ async def mines_cashout_exit(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-# ========== ОБРАБОТКА СТАВКИ (вызов из main.py через FSM) ==========
-
 async def process_mines_bet(message: Message, state: FSMContext, storage):
     user_id = message.from_user.id
     data    = await state.get_data()
     mines_count    = data.get('mines_count')
     waiting_manual = data.get('waiting_manual', False)
 
-    # Шаг 1: ждём ввод кол-ва мин вручную
     if waiting_manual and mines_count is None:
         try:
             m = int(message.text.strip())
@@ -880,7 +810,6 @@ async def process_mines_bet(message: Message, state: FSMContext, storage):
         await state.clear()
         return
 
-    # Блокируем если уже есть активная игра
     if _has_active_game(user_id):
         session = _sessions[user_id]
         await message.answer(
@@ -889,14 +818,12 @@ async def process_mines_bet(message: Message, state: FSMContext, storage):
         )
         return
 
-    # Защита от двойной отправки ставки
     bet_lock = _get_bet_lock(user_id)
     if bet_lock.locked():
         logging.warning(f"[mines] Двойная ставка заблокирована: user_id={user_id}")
         return
 
     async with bet_lock:
-        # Повторная проверка внутри локера
         if _has_active_game(user_id):
             session = _sessions[user_id]
             await message.answer(
@@ -929,7 +856,6 @@ async def process_mines_bet(message: Message, state: FSMContext, storage):
 
         storage.deduct_balance(user_id, bet)
 
-        # ✅ Начисляем реферальную комиссию (2% от ставки)
         asyncio.create_task(notify_referrer_commission(user_id, bet))
 
         session = _create_session(mines_count, bet, message.chat.id, user_id)
@@ -943,20 +869,13 @@ async def process_mines_bet(message: Message, state: FSMContext, storage):
         reply_markup=build_game_keyboard(session)
     )
     session['message_id'] = sent.message_id
-    set_owner_fn(sent.message_id, user_id)          # фиксируем владельца игрового поля
-    _game_board_owner[sent.message_id] = user_id    # надёжная привязка: доска → игрок
+    set_owner_fn(sent.message_id, user_id)
+    _game_board_owner[sent.message_id] = user_id
 
-    # Запускаем таймер бездействия
     _start_timeout(user_id, message.bot, storage)
 
 
-# ========== ОБРАБОТКА КОМАНДЫ /mines ==========
-
 async def process_mines_command(message: Message, state: FSMContext, storage):
-    """
-    Обрабатывает команды:
-      /mines 0.3 5  |  mines 0.3 5  |  /мины 0.3 5  |  мины 0.3 5
-    """
     text  = message.text.strip()
     match = re.match(
         r'^(?:/)?(?:mines|мины)\s+([\d.,]+)\s+(\d+)$',
@@ -1007,7 +926,6 @@ async def process_mines_command(message: Message, state: FSMContext, storage):
 
     user_id = message.from_user.id
 
-    # Блокируем если уже есть активная игра
     if _has_active_game(user_id):
         session = _sessions[user_id]
         await message.answer(
@@ -1016,14 +934,12 @@ async def process_mines_command(message: Message, state: FSMContext, storage):
         )
         return
 
-    # Защита от двойной команды
     bet_lock = _get_bet_lock(user_id)
     if bet_lock.locked():
         logging.warning(f"[mines] Двойная команда заблокирована: user_id={user_id}")
         return
 
     async with bet_lock:
-        # Повторная проверка внутри локера
         if _has_active_game(user_id):
             session = _sessions[user_id]
             await message.answer(
@@ -1042,7 +958,6 @@ async def process_mines_command(message: Message, state: FSMContext, storage):
 
         storage.deduct_balance(user_id, bet)
 
-        # ✅ Начисляем реферальную комиссию (2% от ставки)
         asyncio.create_task(notify_referrer_commission(user_id, bet))
 
         session = _create_session(mines_count, bet, message.chat.id, user_id)
@@ -1056,7 +971,6 @@ async def process_mines_command(message: Message, state: FSMContext, storage):
         reply_markup=build_game_keyboard(session)
     )
     session['message_id'] = sent.message_id
-    set_owner_fn(sent.message_id, user_id)          # фиксируем владельца игрового поля
-    _game_board_owner[sent.message_id] = user_id    # надёжная привязка: доска → игрок
-    # Запускаем таймер бездействия
+    set_owner_fn(sent.message_id, user_id)
+    _game_board_owner[sent.message_id] = user_id
     _start_timeout(user_id, message.bot, storage)
