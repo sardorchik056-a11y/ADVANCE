@@ -72,6 +72,19 @@ async def init_db():
             """)
 
             conn.execute("""
+                CREATE TABLE IF NOT EXISTS withdraw_requests (
+                    req_id     INTEGER PRIMARY KEY,
+                    user_id    INTEGER NOT NULL,
+                    username   TEXT    DEFAULT '',
+                    first_name TEXT    DEFAULT '',
+                    amount     REAL    NOT NULL,
+                    status     TEXT    DEFAULT 'pending',
+                    created_at TEXT    DEFAULT (datetime('now')),
+                    updated_at TEXT    DEFAULT (datetime('now'))
+                )
+            """)
+
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS referrals (
                     id           INTEGER PRIMARY KEY AUTOINCREMENT,
                     new_user_id  INTEGER NOT NULL,
@@ -319,6 +332,48 @@ async def save_withdrawal(user_id: int, amount: float):
             conn.commit()
     except Exception as e:
         logging.error(f"[DB] save_withdrawal user_id={user_id}: {e}")
+
+def db_save_withdraw_request(req_id: int, user_id: int, username: str,
+                              first_name: str, amount: float) -> None:
+    try:
+        with _connect() as conn:
+            conn.execute("""
+                INSERT OR REPLACE INTO withdraw_requests
+                    (req_id, user_id, username, first_name, amount, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, 'pending', datetime('now'), datetime('now'))
+            """, (req_id, user_id, username or '', first_name or '', float(amount)))
+            conn.commit()
+    except Exception as e:
+        logging.error(f"[DB] db_save_withdraw_request req_id={req_id}: {e}")
+
+
+def db_update_withdraw_request_status(req_id: int, status: str) -> None:
+    try:
+        with _connect() as conn:
+            conn.execute("""
+                UPDATE withdraw_requests
+                SET status = ?, updated_at = datetime('now')
+                WHERE req_id = ?
+            """, (status, req_id))
+            conn.commit()
+    except Exception as e:
+        logging.error(f"[DB] db_update_withdraw_request_status req_id={req_id}: {e}")
+
+
+def db_get_pending_withdraw_requests() -> list:
+    try:
+        with _connect() as conn:
+            conn.row_factory = sqlite3.Row
+            cur = conn.execute("""
+                SELECT req_id, user_id, username, first_name, amount, status, created_at
+                FROM withdraw_requests
+                WHERE status = 'pending'
+                ORDER BY created_at ASC
+            """)
+            return [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        logging.error(f"[DB] db_get_pending_withdraw_requests: {e}")
+        return []
 
 
 async def register_referral(new_user_id: int, referrer_id: int):
