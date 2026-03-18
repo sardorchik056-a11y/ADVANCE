@@ -1,38 +1,3 @@
-"""
-duels.py — Модуль дуэлей для Telegram-казино.
-
-Поддерживаемые игры: Кубик, Дартс, Боулинг, Футбол, Баскетбол
-Команды (с/без /, точное совпадение — лишний текст не срабатывает):
-  Кубик:      кубх[N] СУММА  | cubx[N] СУММА  | cubex[N] СУММА
-  Дартс:      дартх[N] СУММА | dartx[N] СУММА | dartsx[N] СУММА
-  Боулинг:    боулх[N] СУММА | boulx[N] СУММА | bowlx[N] СУММА | bowlingx[N] СУММА
-  Футбол:     футх[N] СУММА  | footx[N] СУММА | footballx[N] СУММА | football[N] СУММА
-  Баскетбол:  баскх[N] СУММА | basketx[N] СУММА | basketballx[N] СУММА | basketball[N] СУММА
-  N — кол-во бросков (1..5). Если N > 5 — выдаётся ошибка.
-
-Логика:
-  1. Игрок 1 вводит команду → ставка снимается, карточка дуэли с кнопкой «Принять».
-     Кнопки «Отменить» НЕТ.
-  2. Игрок 2 нажимает «Принять» → ставка снимается, игра начинается.
-  3. Каждый игрок бросает нужное кол-во раз, делая reply на карточку дуэли.
-     Сообщения с бросками НЕ удаляются. Результаты записываются, карточка обновляется.
-  4. Когда оба бросили все броски — карточка обновляется финальным счётом,
-     затем отдельным сообщением выводится результат.
-  5. Таймаут активности: если во время игры один из игроков не бросает 5 минут:
-     - Карточка дуэли обновляется текстом "Игра закрыта!"
-     - В чат дуэли отправляется уведомление о возврате
-     - Ставки возвращаются обоим без комиссии
-     Каждый бросок сбрасывает таймер.
-  6. Ожидание игрока 2: таймаута нет (дуэль ждёт вечно).
-  7. Победитель получает 95% банка.
-  8. При ничьей — каждый получает обратно 95% своей ставки (5% комиссия).
-  9. Отображается first_name [+ last_name] (не @username).
-
-Команды управления:
-  /mygames | /myg | /моиигры  — список ваших активных дуэлей
-  /del | /дел               — отменить все ваши дуэли без соперника (возврат ставки)
-"""
-
 import asyncio
 import logging
 import math
@@ -46,7 +11,6 @@ from aiogram.types import (
 )
 from aiogram.enums import ParseMode
 
-# ─── интеграция с лидерами ────────────────────────────────────────────────────
 try:
     from leaders import record_game_result as _record_game_result
     logging.info("[Duels] Интеграция с leaders.py подключена.")
@@ -55,7 +19,6 @@ except ImportError:
     def _record_game_result(user_id: int, name: str, bet: float, win: float):
         pass
 
-# ─── интеграция с database.py ─────────────────────────────────────────────────
 try:
     from database import save_game_result as _db_save_game_result
     logging.info("[Duels] Интеграция с database.py подключена.")
@@ -64,7 +27,6 @@ except ImportError:
     async def _db_save_game_result(user_id: int, game_name: str, win_amount: float):
         pass
 
-# ─── внешние зависимости ──────────────────────────────────────────────────────
 set_owner_fn = None
 is_owner_fn  = None
 _storage     = None
@@ -77,20 +39,17 @@ def setup_duels(bot, storage):
     _storage = storage
 
 
-# ─── роутер ───────────────────────────────────────────────────────────────────
 duels_router = Router()
 
-# ─── хранилище ────────────────────────────────────────────────────────────────
 _duels: dict[str, dict] = {}
 _msg_to_duel: dict[int, str] = {}
 _duel_counter: int = 0
 
-# ─── константы ────────────────────────────────────────────────────────────────
-COMMISSION       = 0.05   # 5% с банка победителю не уходит / при ничьей с каждого
+COMMISSION       = 0.05
 MAX_THROWS       = 5
 MIN_BET          = 0.3
 MAX_BET          = 10000.0
-ACTIVITY_TIMEOUT = 300    # секунд без броска → отмена
+ACTIVITY_TIMEOUT = 300
 
 GAME_EMOJI: dict[str, str] = {
     'dice':       '🎲',
@@ -107,7 +66,6 @@ GAME_NAMES: dict[str, str] = {
     'basketball': 'Баскетбол',
 }
 
-# ─── паттерны команд ──────────────────────────────────────────────────────────
 _A = r'([\d.,]+)'
 _N = r'(\d+)?'
 
@@ -129,7 +87,6 @@ MYGAMES_PAT = re.compile(r'^/?(?:mygames|myg|моиигры)$', re.I)
 DEL_PAT     = re.compile(r'^/?(?:del|дел)$', re.I)
 
 
-# ─── вспомогательные ──────────────────────────────────────────────────────────
 def _new_duel_id() -> str:
     global _duel_counter
     _duel_counter += 1
@@ -147,14 +104,10 @@ def _throws_word(n: int) -> str:
 
 
 def _sanitize(text: str) -> str:
-    """Экранируем HTML-спецсимволы в именах пользователей."""
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def _fmt_user(first_name: str, username: str | None, last_name: str = "") -> str:
-    """
-    Приоритет отображения: first_name [+ last_name] → username → "Игрок"
-    """
     nickname = (first_name or "").strip()
     if last_name:
         nickname = f"{nickname} {last_name}".strip()
@@ -166,10 +119,6 @@ def _fmt_user(first_name: str, username: str | None, last_name: str = "") -> str
 
 
 def parse_duel_command(text: str):
-    """
-    Возвращает (game_type, throws, amount) или None.
-    Если бросков > MAX_THROWS → ('error_throws', N, 0).
-    """
     if not text:
         return None
     t = text.strip()
@@ -202,8 +151,6 @@ def is_del_command(text: str) -> bool:
     return bool(text and DEL_PAT.match(text.strip()))
 
 
-# ─── вспомогательная запись результата дуэли в обе системы ───────────────────
-
 async def _record_duel_result(
     p1: int, p1t: str,
     p2: int, p2t: str,
@@ -218,7 +165,6 @@ async def _record_duel_result(
     await _db_save_game_result(p2, game_name, p2_win)
 
 
-# ─── текст карточки ───────────────────────────────────────────────────────────
 def _duel_card_text(duel: dict, *, extra: str = "") -> str:
     gt    = duel['game_type']
     emoji = GAME_EMOJI[gt]
@@ -266,7 +212,6 @@ def _duel_card_text(duel: dict, *, extra: str = "") -> str:
 
 
 def _join_kb(duel_id: str) -> InlineKeyboardMarkup:
-    """Только кнопка «Принять» — без отмены."""
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
             text="Принять дуэль",
@@ -276,7 +221,6 @@ def _join_kb(duel_id: str) -> InlineKeyboardMarkup:
     ])
 
 
-# ─── таймер активности ────────────────────────────────────────────────────────
 def _cancel_activity_task(duel: dict):
     task = duel.get('activity_task')
     if task and not task.done():
@@ -327,7 +271,6 @@ async def _activity_timeout(duel_id: str):
     prize    = round(bank * (1 - COMMISSION), 8)
     empty_kb = InlineKeyboardMarkup(inline_keyboard=[])
 
-    # Случай 1: кто-то вообще не бросал → возврат ставок
     if not p1s or not p2s:
         duel['status'] = 'cancelled'
         _storage.add_balance(p1, amount)
@@ -360,7 +303,6 @@ async def _activity_timeout(duel_id: str):
         logging.info(f"[Duels] {duel_id} таймаут — один не бросал, ставки возвращены.")
         return
 
-    # Случай 2: оба бросали → победитель по очкам
     duel['status'] = 'finished'
     p1sum  = sum(p1s)
     p2sum  = sum(p2s)
@@ -427,7 +369,6 @@ async def _activity_timeout(duel_id: str):
     logging.info(f"[Duels] {duel_id} таймаут завершён.")
 
 
-# ─── создание дуэли ───────────────────────────────────────────────────────────
 async def handle_duel_command(message: Message) -> None:
     result = parse_duel_command(message.text)
     if result is None:
@@ -506,17 +447,14 @@ async def handle_duel_command(message: Message) -> None:
     logging.info(f"[Duels] Создана {duel_id}: {game_type}x{throws} на {amount}$ игроком {user_id}")
 
 
-# ─── CALLBACK: принять дуэль ──────────────────────────────────────────────────
 @duels_router.callback_query(F.data.startswith("duel_join:"))
 async def cb_duel_join(callback: CallbackQuery) -> None:
-    # ── Валидация duel_id ──────────────────────────────────────────
     raw     = callback.data.split(":", 1)
     if len(raw) != 2:
         await callback.answer("❌ Некорректные данные!", show_alert=True)
         return
     duel_id = raw[1]
 
-    # Разрешаем только безопасные символы в duel_id
     if not re.match(r'^dl\d+_\d+$', duel_id):
         await callback.answer("❌ Некорректные данные!", show_alert=True)
         return
@@ -566,7 +504,6 @@ async def cb_duel_join(callback: CallbackQuery) -> None:
     logging.info(f"[Duels] {duel_id}: игрок {user_id} принял дуэль.")
 
 
-# ─── обработчик броска ────────────────────────────────────────────────────────
 @duels_router.message(F.dice)
 async def handle_dice_throw(message: Message) -> None:
     if not message.reply_to_message:
@@ -624,7 +561,6 @@ async def handle_dice_throw(message: Message) -> None:
         pass
 
 
-# ─── завершение дуэли ─────────────────────────────────────────────────────────
 async def _finish_duel(duel_id: str, trigger_msg: Message) -> None:
     duel = _duels.get(duel_id)
     if not duel or duel['status'] != 'playing':
@@ -709,7 +645,6 @@ async def _finish_duel(duel_id: str, trigger_msg: Message) -> None:
     await trigger_msg.answer(result_msg, parse_mode=ParseMode.HTML)
 
 
-# ─── /mygames ─────────────────────────────────────────────────────────────────
 async def handle_mygames(message: Message) -> None:
     user_id = message.from_user.id
     active  = [
@@ -749,7 +684,6 @@ async def handle_mygames(message: Message) -> None:
     await message.reply("\n".join(lines), parse_mode=ParseMode.HTML)
 
 
-# ─── /del ─────────────────────────────────────────────────────────────────────
 async def handle_del(message: Message) -> None:
     user_id = message.from_user.id
     waiting = [
