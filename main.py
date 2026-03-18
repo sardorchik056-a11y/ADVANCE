@@ -71,10 +71,10 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 
-LINK_NEWS     = "https://t.me/NewsGGDdice"
-LINK_CHAT     = "https://t.me/GGDgamee"
-LINK_INSTRUCT = "https://t.me/GGDgameInfo"
-LINK_SUPPORT  = "https://t.me/Wertyalot"
+LINK_NEWS     = "https://t.me/weqcazino"
+LINK_CHAT     = "https://t.me/weqchatcazino"
+LINK_INSTRUCT = "https://t.me/weqcazino"
+LINK_SUPPORT  = "https://t.me/qwhatss"
 
 EMOJI_WELCOME    = "5199885118214255386"
 EMOJI_PROFILE    = "5906581476639513176"
