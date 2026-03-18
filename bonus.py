@@ -23,7 +23,7 @@ PENALTY_COOLDOWN = 72 * 3600
 CHECK_INTERVAL   = 2  * 3600
 STALE_THRESHOLD  = 30 * 86400
 
-REQUIRED_NAME_SUBSTRING = "@GGDdiceBot"
+REQUIRED_NAME_SUBSTRING = "@WeqCasBot"
 
 EMOJI_COIN   = "5197434882321567830"
 EMOJI_WIN    = "5278467510604160626"
@@ -187,11 +187,11 @@ async def _handle_bonus_locked(message: Message, user_id: int) -> None:
             "<blockquote>"
             "Для получения бонуса выполни оба условия:\n\n"
             "<tg-emoji emoji-id=\"" + EMOJI_LOSS + "\">❌</tg-emoji> "
-            "В <b>никнейме</b> должна быть: <code>@GGDdiceBot</code>\n"
-            "  Пример: <code>Иван @GGDdiceBot</code>\n\n"
+            "В <b>никнейме</b> должна быть: <code>@WeqCasBot</code>\n"
+            "  Пример: <code>Иван @WeqCasBot</code>\n\n"
             "<tg-emoji emoji-id=\"" + EMOJI_LOSS + "\">❌</tg-emoji> "
             "В <b>«О себе»</b> должна быть:\n"
-            "  <code>честная игровая зона-@GGDdiceBot</code>\n\n"
+            "  <code>честная игровая зона-@WeqCasBot</code>\n\n"
             "После выполнения введите /bonus снова!</blockquote>",
             parse_mode=ParseMode.HTML,
         )
