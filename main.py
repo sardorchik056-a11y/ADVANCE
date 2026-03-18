@@ -348,9 +348,21 @@ def get_main_menu_text():
 def get_games_menu_text(user_id: int):
     balance = sync_balances(user_id)
     return (
-        f'<blockquote><tg-emoji emoji-id="{EMOJI_GAMES}">🎮</tg-emoji> <b>Игры</b></blockquote>\n\n'
-        f'<blockquote><tg-emoji emoji-id="5278467510604160626">🎮</tg-emoji>:<code>{balance:.2f}</code><tg-emoji emoji-id="5197434882321567830">🎮</tg-emoji></blockquote>\n\n'
-        f'<blockquote><b>Выберите игру:</b></blockquote>\n\n'
+        f'<tg-emoji emoji-id="5424972470023104089">👋</tg-emoji> <b>Игры</b>\n\n'
+        f'<blockquote><b><tg-emoji emoji-id="5197269100878907942">👋</tg-emoji>Текстовые команды:</b>\n'
+        f'  <tg-emoji emoji-id="5195033767969839232">👋</tg-emoji>Эмоджи игры:\n'
+        f"  <code>куб (исход) (сумма)</code>\n"
+        f"  <code>баскет (исход) (сумма)</code>\n"
+        f"  <code>фут (исход) (сумма)</code>\n"
+        f"  <code>дартс (исход) (сумма)</code>\n"
+        f"  <code>боулинг (исход) (сумма)</code>\n"
+        f"</blockquote>"
+        f"<blockquote>"
+        f'  <tg-emoji emoji-id="5197288647275071607">👋</tg-emoji>Мины игры:\n'
+        f"  <code>мины (сумма) (сложность)</code>\n"
+        f"  <code>башня (сумма) (сложность)</code>\n"
+        f"  <code>золото (сумма)</code>\n"
+        f"</blockquote>"
         f'{links_line()}\n'
     )
 
