@@ -18,7 +18,8 @@ from dotenv import load_dotenv
 try:
     from database import (
         save_deposit, save_withdrawal, update_user_info,
-        db_get_all_users, db_set_balance, db_update_field, db_get_user
+        db_get_all_users, db_set_balance, db_update_field, db_get_user,
+        db_save_withdraw_request, db_update_withdraw_request_status,
     )
 except ImportError:
     async def save_deposit(user_id, amount, crypto_invoice_id): pass
@@ -28,6 +29,8 @@ except ImportError:
     def db_set_balance(user_id, amount): pass
     def db_update_field(user_id, field, value): pass
     def db_get_user(user_id): return {}
+    def db_save_withdraw_request(req_id, user_id, username, first_name, amount): pass
+    def db_update_withdraw_request_status(req_id, status): pass
 
 try:
     from leaders import (
@@ -90,6 +93,10 @@ class WithdrawQueue:
         self._counter += 1
         req = WithdrawRequest(self._counter, user_id, username, first_name, amount)
         self._requests[self._counter] = req
+        try:
+            db_save_withdraw_request(req.req_id, user_id, username, first_name, amount)
+        except Exception as e:
+            logging.error(f"[WithdrawQueue] Ошибка сохранения в БД: {e}")
         return self._counter
 
     def get(self, req_id: int) -> Optional[WithdrawRequest]:
@@ -697,6 +704,10 @@ async def _approve_request(req: WithdrawRequest) -> tuple:
         return False, f'❌ Ошибка создания чека для заявки #{req.req_id}'
 
     req.status = 'approved'
+    try:
+        db_update_withdraw_request_status(req.req_id, 'approved')
+    except Exception as e:
+        logging.error(f"[Approve] Ошибка обновления статуса в БД: {e}")
 
     try:
         await bot.send_message(
@@ -723,6 +734,10 @@ async def _reject_request(req: WithdrawRequest) -> tuple:
         return False, f'Заявка #{req.req_id} уже обработана (статус: {req.status})'
 
     req.status = 'rejected'
+    try:
+        db_update_withdraw_request_status(req.req_id, 'rejected')
+    except Exception as e:
+        logging.error(f"[Reject] Ошибка обновления статуса в БД: {e}")
 
     try:
         await bot.send_message(
@@ -732,7 +747,7 @@ async def _reject_request(req: WithdrawRequest) -> tuple:
             f'<tg-emoji emoji-id="5397782960512444700">💰</tg-emoji> Заявка: <b>#{req.req_id}</b>\n'
             f'<tg-emoji emoji-id="5197434882321567830">💰</tg-emoji> Сумма: <code>{req.amount}</code> USDT'
             f'</blockquote>\n\n'
-            f'<i><b>По вопросам обратитесь в поддержку!</i></b>',
+            f'<i>По вопросам обратитесь в поддержку!</i>',
             parse_mode=ParseMode.HTML
         )
     except Exception as e:
