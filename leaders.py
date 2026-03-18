@@ -6,7 +6,6 @@ from aiogram.enums import ParseMode
 
 leaders_router = Router()
 
-# ── ID кастомных эмодзи ───────────────────────────────────────────────────────
 EMOJI_LEADERS  = "5440539497383087970"
 EMOJI_BACK     = "5906771962734057347"
 EMOJI_TURNOVER = "5402186569006210455"
@@ -50,12 +49,6 @@ PERIOD_LABELS = {
 
 DB_PATH = "casino.db"
 
-# ── Кэш в памяти ─────────────────────────────────────────────────────────────
-# _stats[user_id][date_str] = {
-#   "turnover": float, "wins": float,
-#   "deposits": float, "withdrawals": float,
-#   "name": str   ← first_name [+ last_name], иначе username, иначе "User {id}"
-# }
 _stats: dict = {}
 
 def _noop_set_owner(message_id: int, user_id: int): pass
@@ -64,11 +57,6 @@ def _noop_is_owner(message_id: int, user_id: int) -> bool: return True
 set_owner_fn = _noop_set_owner
 is_owner_fn  = _noop_is_owner
 
-
-# ══════════════════════════════════════════════════════════════════
-#  Вспомогательная: единое правило определения имени
-#  Приоритет: first_name [+ last_name] → username → "User {uid}"
-# ══════════════════════════════════════════════════════════════════
 
 def _resolve_display_name(
     user_id: int,
@@ -86,10 +74,6 @@ def _resolve_display_name(
     return f"User {user_id}"
 
 
-# ══════════════════════════════════════════════════════════════════
-#  SQLite: инициализация таблицы
-# ══════════════════════════════════════════════════════════════════
-
 def _db_connect() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -97,10 +81,6 @@ def _db_connect() -> sqlite3.Connection:
 
 
 def init_leaders_db():
-    """
-    Создаёт таблицу leaders_stats если её нет.
-    Загружает данные в память (_stats) и синхронизирует имена из users.
-    """
     try:
         with _db_connect() as conn:
             conn.execute("""
@@ -115,7 +95,6 @@ def init_leaders_db():
                     PRIMARY KEY (user_id, date)
                 )
             """)
-            # Миграция: добавляем колонки если таблица уже существовала без них
             for col in ("deposits", "withdrawals"):
                 try:
                     conn.execute(f"ALTER TABLE leaders_stats ADD COLUMN {col} REAL DEFAULT 0.0")
@@ -130,7 +109,6 @@ def init_leaders_db():
 
 
 def _load_stats_from_db():
-    """Загружает всю таблицу leaders_stats в память (_stats)."""
     global _stats
     try:
         with _db_connect() as conn:
@@ -159,7 +137,6 @@ def _load_stats_from_db():
 
 
 def _save_stat_to_db(user_id: int, date: str):
-    """Сохраняет одну запись (user_id, date) из _stats в leaders_stats."""
     try:
         day = _stats.get(user_id, {}).get(date)
         if day is None:
@@ -188,7 +165,6 @@ def _save_stat_to_db(user_id: int, date: str):
 
 
 def _ensure_day(user_id: int, date: str, name: str = ""):
-    """Гарантирует наличие записи для (user_id, date) в _stats."""
     if user_id not in _stats:
         _stats[user_id] = {}
     if date not in _stats[user_id]:
@@ -201,19 +177,10 @@ def _ensure_day(user_id: int, date: str, name: str = ""):
         _stats[user_id][date]["name"] = name
 
 
-# ══════════════════════════════════════════════════════════════════
-#  Синхронизация имён из таблицы users
-#  Приоритет: first_name [+ last_name] → username → "User {uid}"
-# ══════════════════════════════════════════════════════════════════
-
 def sync_names_from_db():
-    """
-    Подтягивает актуальные имена из таблицы users в кэш _stats.
-    """
     try:
         with _db_connect() as conn:
             cur = conn.cursor()
-            # Пробуем выбрать last_name — если колонки нет, fallback без неё
             try:
                 cur.execute("SELECT user_id, first_name, last_name, username FROM users")
                 rows = cur.fetchall()
@@ -239,10 +206,6 @@ def sync_names_from_db():
         logging.warning(f"[Leaders] sync_names_from_db пропущен: {e}")
 
 
-# ══════════════════════════════════════════════════════════════════
-#  Вспомогательные функции дат
-# ══════════════════════════════════════════════════════════════════
-
 def _today_str() -> str:
     from datetime import datetime, timezone
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -262,20 +225,7 @@ def _dates_for_period(period: str) -> list:
     return [str(today)]
 
 
-# ══════════════════════════════════════════════════════════════════
-#  Публичные функции записи результатов
-# ══════════════════════════════════════════════════════════════════
-
 def record_game_result(user_id: int, name: str, bet: float, win: float):
-    """
-    Вызывается из mines.py / tower.py / gold.py / game.py / duels.py
-    после завершённой ставки.
-
-    name — уже готовое отображаемое имя (first_name [+ last_name] или username),
-           сформированное через _get_display_name() / _fmt_user() в игровом модуле.
-    bet  — размер ставки (оборот)
-    win  — сумма выплаты (0.0 при проигрыше)
-    """
     date = _today_str()
     _ensure_day(user_id, date, name)
     _stats[user_id][date]["turnover"] += bet
@@ -287,7 +237,6 @@ def record_game_result(user_id: int, name: str, bet: float, win: float):
 
 
 def _save_to_game_results_sync(user_id: int, game_name: str, win_amount: float):
-    """Синхронная запись в game_results (таблица из database.py)."""
     try:
         with _db_connect() as conn:
             conn.execute("""
@@ -300,10 +249,6 @@ def _save_to_game_results_sync(user_id: int, game_name: str, win_amount: float):
 
 
 def record_deposit_stat(user_id: int, name: str, amount: float):
-    """
-    Вызывается из payment.py после подтверждения депозита.
-    name должен быть уже разрешён через _resolve_display_name.
-    """
     date = _today_str()
     _ensure_day(user_id, date, name)
     _stats[user_id][date]["deposits"] += amount
@@ -313,10 +258,6 @@ def record_deposit_stat(user_id: int, name: str, amount: float):
 
 
 def record_withdrawal_stat(user_id: int, name: str, amount: float):
-    """
-    Вызывается из payment.py после успешного вывода.
-    name должен быть уже разрешён через _resolve_display_name.
-    """
     date = _today_str()
     _ensure_day(user_id, date, name)
     _stats[user_id][date]["withdrawals"] += amount
@@ -326,7 +267,6 @@ def record_withdrawal_stat(user_id: int, name: str, amount: float):
 
 
 def rollback_withdrawal_stat(user_id: int, amount: float):
-    """Откатывает record_withdrawal_stat — вызывается если чек не был создан."""
     date = _today_str()
     day  = _stats.get(user_id, {}).get(date)
     if day is None:
@@ -345,12 +285,7 @@ def update_user_name(storage, user_id: int, first_name: str):
         pass
 
 
-# ══════════════════════════════════════════════════════════════════
-#  Топ-10
-# ══════════════════════════════════════════════════════════════════
-
 def get_top10(storage, leader_type: str, period: str) -> list:
-    # Проверка допустимых значений (защита от инъекций через leader_type/period)
     if leader_type not in LEADER_TYPES or period not in LEADER_PERIODS:
         return []
 
@@ -370,10 +305,6 @@ def get_top10(storage, leader_type: str, period: str) -> list:
     sorted_list = sorted(results.values(), key=lambda x: x["value"], reverse=True)
     return sorted_list[:10]
 
-
-# ══════════════════════════════════════════════════════════════════
-#  Клавиатура
-# ══════════════════════════════════════════════════════════════════
 
 def get_leaders_keyboard(active_type: str, active_period: str) -> InlineKeyboardMarkup:
     def type_btn(t_id: str):
@@ -403,12 +334,7 @@ def get_leaders_keyboard(active_type: str, active_period: str) -> InlineKeyboard
     ])
 
 
-# ══════════════════════════════════════════════════════════════════
-#  Текст таблицы
-# ══════════════════════════════════════════════════════════════════
-
 def build_leaders_text(storage, leader_type: str, period: str) -> str:
-    # Защита от недопустимых значений
     if leader_type not in LEADER_TYPES:
         leader_type = "turnover"
     if period not in LEADER_PERIODS:
@@ -443,10 +369,6 @@ def build_leaders_text(storage, leader_type: str, period: str) -> str:
     return header + body
 
 
-# ══════════════════════════════════════════════════════════════════
-#  Публичная функция входа
-# ══════════════════════════════════════════════════════════════════
-
 async def show_leaders(callback: CallbackQuery, storage_obj):
     text = build_leaders_text(storage_obj, "turnover", "today")
     kb   = get_leaders_keyboard("turnover", "today")
@@ -454,10 +376,6 @@ async def show_leaders(callback: CallbackQuery, storage_obj):
     set_owner_fn(callback.message.message_id, callback.from_user.id)
     await callback.answer()
 
-
-# ══════════════════════════════════════════════════════════════════
-#  Хендлер переключения
-# ══════════════════════════════════════════════════════════════════
 
 @leaders_router.callback_query(F.data.startswith("leaders:"))
 async def leaders_switch(callback: CallbackQuery):
@@ -468,7 +386,6 @@ async def leaders_switch(callback: CallbackQuery):
 
     _, leader_type, period = parts
 
-    # ── Валидация входных данных ──────────────────────────────────
     if leader_type not in LEADER_TYPES or period not in LEADER_PERIODS:
         await callback.answer("Неверные параметры", show_alert=True)
         return
