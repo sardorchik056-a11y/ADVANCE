@@ -24,7 +24,6 @@ PENALTY_COOLDOWN = 72 * 3600
 CHECK_INTERVAL   = 2  * 3600
 STALE_THRESHOLD  = 30 * 86400
 
-# Проверяем ТОЛЬКО это (в никнейме)
 REQUIRED_NAME_SUBSTRING = "@GGDdiceBot"
 
 EMOJI_COIN   = "5197434882321567830"
@@ -151,7 +150,7 @@ def is_bonus_command(text: str) -> bool:
     return text.strip().lower().lstrip("/") in ("bonus", "бонус")
 
 
-# ── Основная логика ───────────────────────────────────────────────
+#Основная логика
 
 async def handle_bonus(message: Message, user_id: int | None = None) -> None:
     actual_user_id = user_id if user_id is not None else message.from_user.id
@@ -163,7 +162,6 @@ async def _handle_bonus_locked(message: Message, user_id: int) -> None:
     state = _get_user_state(user_id)
     state["last_activity"] = _now()
 
-    # ── Проверяем кулдаун сначала (без лишних запросов к API) ────
     can, remaining, is_penalty = _can_claim(user_id)
     if not can:
         body = (
@@ -181,7 +179,6 @@ async def _handle_bonus_locked(message: Message, user_id: int) -> None:
         )
         return
 
-    # ── Проверяем никнейм ────────────────────────────────────────
     first_name = await _fetch_first_name(user_id)
     name_ok    = _check_name(first_name)
 
