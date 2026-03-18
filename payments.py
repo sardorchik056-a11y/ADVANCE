@@ -718,7 +718,7 @@ async def _approve_request(req: WithdrawRequest) -> tuple:
     return True, f'✅ Заявка #{req.req_id} одобрена | {display} | {req.amount} USDT'
 
 
-async def _approve_request(req: WithdrawRequest) -> tuple:
+async def _reject_request(req: WithdrawRequest) -> tuple:
     if req.status != 'pending':
         return False, f'Заявка #{req.req_id} уже обработана (статус: {req.status})'
 
