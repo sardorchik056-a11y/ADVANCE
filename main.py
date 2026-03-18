@@ -164,12 +164,7 @@ def _inject_leaders_owner_fns():
     _duels_module.is_owner_fn      = _is_msg_owner
 
 
-# ========== СОХРАНЕНИЕ ЮЗЕРНЕЙМА ==========
 def _save_username(user_id: int, username: str, first_name: str = ""):
-    """
-    Сохраняет актуальный юзернейм и имя пользователя в storage.users.
-    Вызывается при каждом нажатии кнопки и при каждом сообщении.
-    """
     try:
         user_data = storage.get_user(user_id)
         changed = False
@@ -393,14 +388,12 @@ def get_profile_text(user_first_name: str, days_in_project: int, user_id: int):
     )
 
 
-# ========== /start ==========
 @router.message(CommandStart())
 async def cmd_start(message: Message):
     try:
         args  = message.text.split(maxsplit=1)
         param = args[1] if len(args) > 1 else ""
 
-        # Сохраняем юзернейм сразу при /start
         storage.get_user(message.from_user.id)
         _save_username(
             message.from_user.id,
@@ -440,7 +433,6 @@ async def cmd_start(message: Message):
         await message.answer("Произошла ошибка. Попробуйте позже.")
 
 
-# ========== /add — выдача/снятие по ID или @username ==========
 @router.message(F.text.startswith("/add") & ~F.text.startswith("/addpromo"))
 async def cmd_add_balance(message: Message):
     if message.from_user.id not in ADMIN_IDS:
@@ -462,7 +454,6 @@ async def cmd_add_balance(message: Message):
     target_input = parts[1]
     amount_str   = parts[2]
 
-    # ── Парсим сумму (разрешаем отрицательные) ──────────────────────
     try:
         amount = float(amount_str.replace(',', '.'))
     except ValueError:
@@ -473,14 +464,12 @@ async def cmd_add_balance(message: Message):
         await message.answer("❌ Сумма не может быть равна нулю.", parse_mode=ParseMode.HTML)
         return
 
-    # ── Определяем target_id ─────────────────────────────────────────
     target_id   = None
     target_name = target_input
 
     if target_input.startswith("@"):
         username_clean = target_input.lstrip("@").lower()
 
-        # Ищем по юзернейму в storage.users (все пользователи уже в памяти)
         for uid, udata in storage.users.items():
             stored = (udata.get("username") or "").lstrip("@").lower()
             if stored and stored == username_clean:
@@ -511,7 +500,6 @@ async def cmd_add_balance(message: Message):
             )
             return
 
-    # ── Проверяем баланс при снятии ──────────────────────────────────
     if amount < 0:
         current_balance = storage.get_balance(target_id)
         if current_balance + amount < 0:
@@ -522,7 +510,6 @@ async def cmd_add_balance(message: Message):
             )
             return
 
-    # ── Применяем изменение ──────────────────────────────────────────
     storage.get_user(target_id)
     storage.add_balance(target_id, amount)
     new_balance = storage.get_balance(target_id)
@@ -539,7 +526,6 @@ async def cmd_add_balance(message: Message):
     )
 
 
-# ========== /addpromo ==========
 @router.message(F.text.startswith("/addpromo"))
 async def cmd_add_promo(message: Message):
     if message.from_user.id not in ADMIN_IDS:
@@ -572,7 +558,6 @@ async def cmd_add_promo(message: Message):
     )
 
 
-# ========== ПРОМОКОДЫ ==========
 @router.callback_query(F.data == "promo_menu")
 async def promo_menu_callback(callback: CallbackQuery, state: FSMContext):
     _save_username(callback.from_user.id, callback.from_user.username or "", callback.from_user.first_name or "")
@@ -604,7 +589,6 @@ async def promo_enter_callback(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-# ========== ПРОФИЛЬ ==========
 @router.callback_query(F.data == "profile")
 async def profile_callback(callback: CallbackQuery, state: FSMContext):
     _save_username(callback.from_user.id, callback.from_user.username or "", callback.from_user.first_name or "")
@@ -626,7 +610,6 @@ async def profile_callback(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-# ========== ИГРЫ ==========
 @router.callback_query(F.data == "games")
 async def games_callback(callback: CallbackQuery, state: FSMContext):
     _save_username(callback.from_user.id, callback.from_user.username or "", callback.from_user.first_name or "")
@@ -725,7 +708,6 @@ async def handle_cancel_bet(callback: CallbackQuery, state: FSMContext):
     await cancel_bet(callback, state, betting_game)
 
 
-# ========== ДЕПОЗИТ / ВЫВОД ==========
 @router.callback_query(F.data == "deposit")
 async def deposit_callback(callback: CallbackQuery, state: FSMContext):
     _save_username(callback.from_user.id, callback.from_user.username or "", callback.from_user.first_name or "")
@@ -755,7 +737,6 @@ async def withdraw_callback(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-# ========== ПЕРЕВОД ==========
 @router.message(F.text.regexp(r'(?i)^(?:/)?(?:pay|дать)\s+[\d.,]+$'))
 async def handle_transfer(message: Message, state: FSMContext):
     _save_username(message.from_user.id, message.from_user.username or "", message.from_user.first_name or "")
@@ -792,7 +773,6 @@ async def handle_transfer(message: Message, state: FSMContext):
         if storage.get_balance(message.from_user.id) < amount:
             await message.reply("<blockquote>❌<b>Недостаточно средств!</b></blockquote>", parse_mode=ParseMode.HTML); return
         storage.get_user(target.id)
-        # Сохраняем юзернейм получателя тоже
         _save_username(target.id, target.username or "", target.first_name or "")
         storage.add_balance(message.from_user.id, -amount)
         storage.add_balance(target.id, amount)
@@ -803,7 +783,6 @@ async def handle_transfer(message: Message, state: FSMContext):
     )
 
 
-# ========== ИГРОВЫЕ КОМАНДЫ ==========
 @router.message(F.text.regexp(r'(?i)^(?:/)?(?:mines|мины)\s+[\d.,]+\s+\d+$'))
 async def mines_command_handler(message: Message, state: FSMContext):
     _save_username(message.from_user.id, message.from_user.username or "", message.from_user.first_name or "")
@@ -865,12 +844,10 @@ async def handle_reject_main(message: Message):
     await handle_reject(message)
 
 
-# ========== ОБЩИЙ ОБРАБОТЧИК ТЕКСТА ==========
 @router.message(F.text)
 async def handle_text_message(message: Message, state: FSMContext):
     from payments import handle_amount_input
 
-    # Сохраняем юзернейм при каждом сообщении
     _save_username(message.from_user.id, message.from_user.username or "", message.from_user.first_name or "")
 
     if is_balance_command(message.text):
@@ -962,7 +939,6 @@ async def handle_text_message(message: Message, state: FSMContext):
         pass
 
 
-# ========== ЛИДЕРЫ / О ПРОЕКТЕ / НАЗАД ==========
 @router.callback_query(F.data == "leaders")
 async def leaders_callback(callback: CallbackQuery, state: FSMContext):
     _save_username(callback.from_user.id, callback.from_user.username or "", callback.from_user.first_name or "")
@@ -1007,7 +983,6 @@ async def back_to_main_callback(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-# ========== ЗАПУСК ==========
 async def main():
     global betting_game
 
