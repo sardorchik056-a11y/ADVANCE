@@ -8,39 +8,32 @@ import re
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Tuple
 
-# База данных
 try:
     from database import save_game_result as db_save_game_result, update_balance as db_update_balance
 except ImportError:
     async def db_save_game_result(user_id, game_name, score): pass
     async def db_update_balance(user_id, amount): return None
 
-# Реферальная система
 try:
     from referrals import notify_referrer_commission
 except ImportError:
     async def notify_referrer_commission(user_id: int, bet_amount: float):
         pass
 
-# Модуль лидеров
 try:
     from leaders import record_game_result
 except ImportError:
     def record_game_result(user_id, name, bet, win):
         pass
 
-# Настройка логирования
 logging.basicConfig(level=logging.INFO)
 
-# Конфигурация
 MIN_BET = 0.1
 MAX_BET = 10000.0
 
-# Защита от дублирования ставок
-RATE_LIMIT_SECONDS = 3  # Минимальное время между ставками
+RATE_LIMIT_SECONDS = 3
 user_last_bet_time: Dict[int, datetime] = {}
 
-# ID кастомных эмодзи
 EMOJI_DICE = "5424972470023104089"
 EMOJI_BASKETBALL = "5424972470023104089"
 EMOJI_FOOTBALL = "5424972470023104089"
@@ -67,7 +60,6 @@ EMOJI_GOAL = "5206607081334906820"
 EMOJI_3POINT = "5397782960512444700"
 EMOJI_MISS = "5210952531676504517"
 
-# Конфигурации для ставок
 DICE_BET_TYPES = {
     'куб_нечет': {'name': '🎲 Нечетное', 'values': [1, 3, 5], 'multiplier': 1.9},
     'куб_чет': {'name': '🎲 Четное', 'values': [2, 4, 6], 'multiplier': 1.9},
@@ -107,51 +99,42 @@ BOWLING_BET_TYPES = {
     'боулинг_страйк': {'name': '🎳 Страйк', 'values': [6], 'multiplier': 5.7},
 }
 
-# Маппинг команд для текстового ввода (РАСШИРЕННЫЙ)
 COMMAND_MAPPING = {
-    # Футбол
     'фут': 'футбол',
     'fut': 'футбол',
     'foot': 'футбол',
     'футбол': 'футбол',
     'football': 'футбол',
     
-    # Баскетбол
     'баскет': 'баскет',
     'basket': 'баскет',
     'basketball': 'баскет',
     'баскетбол': 'баскет',
     'bask': 'баскет',
     
-    # Кубик
     'куб': 'куб',
     'dice': 'куб',
     'кубик': 'куб',
     'cube': 'куб',
     
-    # Дартс
     'дартс': 'дартс',
     'dart': 'дартс',
     'darts': 'дартс',
     'дарт': 'дартс',
     
-    # Боулинг
     'боулинг': 'боулинг',
     'bowling': 'боулинг',
     'боул': 'боулинг',
     'bowl': 'боулинг',
 }
 
-# Маппинг типов ставок (ПОЛНЫЙ СПИСОК)
 BET_TYPE_MAPPING = {
-    # Баскетбол
     '3очка': 'баскет_3очка',
     '3points': 'баскет_3очка',
     '3': 'баскет_3очка',
     'три': 'баскет_3очка',
     'three': 'баскет_3очка',
     
-    # Кубик - ВСЕ ИСХОДЫ
     'нечет': 'куб_нечет',
     'odd': 'куб_нечет',
     'нечетное': 'куб_нечет',
@@ -184,7 +167,6 @@ BET_TYPE_MAPPING = {
     'обабольше': 'куб_2больше',
     'bothmore': 'куб_2больше',
     
-    # Точные числа
     '1': 'куб_1',
     '2': 'куб_2',
     '3': 'куб_3',
@@ -192,7 +174,6 @@ BET_TYPE_MAPPING = {
     '5': 'куб_5',
     '6': 'куб_6',
     
-    # Дартс - ВСЕ ИСХОДЫ
     'белое': 'дартс_белое',
     'white': 'дартс_белое',
     'белый': 'дартс_белое',
@@ -207,7 +188,6 @@ BET_TYPE_MAPPING = {
     'center': 'дартс_центр',
     'bull': 'дартс_центр',
     
-    # Боулинг - ВСЕ ИСХОДЫ
     'победа': 'боулинг_победа',
     'win': 'боулинг_победа',
     'victory': 'боулинг_победа',
@@ -223,7 +203,6 @@ BET_TYPE_MAPPING = {
     'стр': 'боулинг_страйк',
 }
 
-# Состояния FSM
 class BetStates(StatesGroup):
     waiting_for_amount = State()
 
@@ -231,7 +210,7 @@ class BettingGame:
     def __init__(self, bot: Bot):
         self.bot = bot
         self.pending_bets = {}
-        self.active_games = {}  # Защита от одновременных игр
+        self.active_games = {}
         self.referral_system = None
 
     @property
@@ -250,16 +229,13 @@ class BettingGame:
         return self._storage.get_balance(user_id)
 
     def add_balance(self, user_id: int, amount: float) -> float:
-        """Зачисление выигрыша — НЕ депозит, total_deposits не меняется."""
         self._storage.add_balance(user_id, amount)
         return self._storage.get_balance(user_id)
 
     def subtract_balance(self, user_id: int, amount: float) -> bool:
-        """Списание ставки — НЕ вывод, total_withdrawals не меняется."""
         return self._storage.deduct_balance(user_id, amount)
 
     def get_bet_config(self, bet_type: str):
-        """Получить конфигурацию ставки по типу"""
         if bet_type.startswith('куб_'):
             return DICE_BET_TYPES.get(bet_type)
         elif bet_type.startswith('баскет_'):
@@ -356,16 +332,7 @@ def is_bet_command(text: str) -> bool:
     return game in COMMAND_MAPPING
 
 
-# ─────────────────────────────────────────────
-# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ БЕЗОПАСНОЙ ОТПРАВКИ
-# ─────────────────────────────────────────────
-
 async def _safe_reply(target_message: Message, text: str, parse_mode: str = 'HTML'):
-    """
-    Пытается ответить на сообщение. Если не получается (бот исключён,
-    нет прав и т.д.) — молча логирует и продолжает. Баланс к этому
-    моменту уже изменён, возврата средств НЕ происходит.
-    """
     try:
         await target_message.reply(text, parse_mode=parse_mode)
     except Exception as e:
@@ -373,10 +340,6 @@ async def _safe_reply(target_message: Message, text: str, parse_mode: str = 'HTM
 
 
 async def _delayed_safe_reply(target_message: Message, text: str, delay: float = 3.0, parse_mode: str = 'HTML'):
-    """
-    Ждёт окончания анимации кубика (delay сек) и отправляет результат в фоне.
-    Основная корутина к этому моменту уже завершена — никаких блокировок.
-    """
     await asyncio.sleep(delay)
     await _safe_reply(target_message, text, parse_mode=parse_mode)
 
@@ -389,11 +352,6 @@ def _apply_game_result(
     bet_config: dict,
     betting_game: BettingGame,
 ) -> float:
-    """
-    НЕМЕДЛЕННО применяет результат игры к балансу и записывает в БД/лидеры.
-    Вызывается сразу после получения значения кубика, ДО любого sleep.
-    Возвращает сумму выигрыша (0.0 при проигрыше).
-    """
     if is_win:
         winnings = amount * bet_config['multiplier']
         betting_game.add_balance(user_id, winnings)
@@ -433,10 +391,6 @@ def _build_lose_text(nickname: str) -> str:
     )
 
 
-# ─────────────────────────────────────────────
-# ИГРОВЫЕ ФУНКЦИИ
-# ─────────────────────────────────────────────
-
 async def play_single_dice_game(
     chat_id: int,
     user_id: int,
@@ -447,7 +401,6 @@ async def play_single_dice_game(
     betting_game: BettingGame,
     reply_to_message: Message = None,
 ):
-    """Игра с одним броском. Результат фиксируется сразу после броска."""
     if bet_type.startswith('куб_'):
         emoji = "🎲"
     elif bet_type.startswith('баскет_'):
@@ -468,11 +421,9 @@ async def play_single_dice_game(
     dice_message = await betting_game.bot.send_dice(**send_kwargs)
     dice_value = dice_message.dice.value
 
-    # ✅ РЕЗУЛЬТАТ ФИКСИРУЕТСЯ НЕМЕДЛЕННО — до любого sleep и до отправки текста
     is_win = dice_value in bet_config.get('values', [])
     winnings = _apply_game_result(user_id, nickname, amount, is_win, bet_config, betting_game)
 
-    # Результат уходит в фоновый таск — ждёт анимацию сам, основная корутина не блокируется
     text = _build_win_text(nickname, winnings) if is_win else _build_lose_text(nickname)
     asyncio.create_task(_delayed_safe_reply(dice_message, text, delay=3.0))
 
@@ -487,7 +438,6 @@ async def play_double_dice_game(
     betting_game: BettingGame,
     reply_to_message: Message = None,
 ):
-    """Игра с двумя кубиками. Результат фиксируется сразу после второго броска."""
     send_kwargs = {'chat_id': chat_id, 'emoji': '🎲'}
     if reply_to_message:
         send_kwargs['reply_to_message_id'] = reply_to_message.message_id
@@ -500,15 +450,13 @@ async def play_double_dice_game(
     dice1_value = dice1.dice.value
     dice2_value = dice2.dice.value
 
-    # ✅ РЕЗУЛЬТАТ ФИКСИРУЕТСЯ ДО любого sleep
     if bet_type == 'куб_2меньше':
         is_win = dice1_value < 4 and dice2_value < 4
-    else:  # куб_2больше
+    else:
         is_win = dice1_value > 3 and dice2_value > 3
 
     winnings = _apply_game_result(user_id, nickname, amount, is_win, bet_config, betting_game)
 
-    # Результат уходит в фоновый таск — анимация второго кубика ~3 сек
     text = _build_win_text(nickname, winnings) if is_win else _build_lose_text(nickname)
     asyncio.create_task(_delayed_safe_reply(dice2, text, delay=3.0))
 
@@ -523,11 +471,6 @@ async def play_bowling_vs_game(
     betting_game: BettingGame,
     reply_to_message: Message = None,
 ):
-    """
-    Боулинг против бота с перебросами до победы.
-    Результат фиксируется сразу после определения победителя,
-    до попытки отправить текстовое сообщение.
-    """
     send_kwargs = {'chat_id': chat_id, 'emoji': '🎳'}
     if reply_to_message:
         send_kwargs['reply_to_message_id'] = reply_to_message.message_id
@@ -540,9 +483,7 @@ async def play_bowling_vs_game(
     player_value = player_roll.dice.value
     bot_value = bot_roll.dice.value
 
-    # Перебросы при ничьей
     while player_value == bot_value:
-        # Пробуем уведомить о ничьей, но не падаем при ошибке
         asyncio.create_task(
             _safe_reply(player_roll, "<tg-emoji emoji-id=\"5402186569006210455\">🎉</tg-emoji>Ничья! Переброс...")
         )
@@ -556,7 +497,6 @@ async def play_bowling_vs_game(
         player_value = player_roll.dice.value
         bot_value = bot_roll.dice.value
 
-    # ✅ РЕЗУЛЬТАТ ФИКСИРУЕТСЯ НЕМЕДЛЕННО после определения победителя
     if bet_type == 'боулинг_победа':
         is_win = player_value > bot_value
     elif bet_type == 'боулинг_поражение':
@@ -572,12 +512,7 @@ async def play_bowling_vs_game(
         asyncio.create_task(_safe_reply(bot_roll, _build_lose_text(nickname)))
 
 
-# ─────────────────────────────────────────────
-# ОБРАБОТЧИКИ СООБЩЕНИЙ
-# ─────────────────────────────────────────────
-
 async def handle_text_bet_command(message: Message, betting_game: BettingGame):
-    """Обработка текстовых команд ставок."""
     user_id = message.from_user.id
 
     allowed, wait_time = check_rate_limit(user_id)
@@ -637,8 +572,6 @@ async def handle_text_bet_command(message: Message, betting_game: BettingGame):
         else:
             await play_single_dice_game(message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message)
     except Exception as e:
-        # Сюда попадаем только если сам send_dice упал (например, бот исключён ДО броска).
-        # В этом случае кубик не был брошен → результат не зафиксирован → возвращаем деньги.
         logging.error(f"Ошибка при отправке кубика (до броска): {e}")
         betting_game.add_balance(user_id, amount)
         try:
@@ -650,7 +583,6 @@ async def handle_text_bet_command(message: Message, betting_game: BettingGame):
 
 
 async def safe_edit_message(callback: CallbackQuery, text: str, reply_markup=None, parse_mode=None):
-    """Безопасное редактирование сообщения с обработкой ошибок"""
     try:
         await callback.message.edit_text(text, parse_mode=parse_mode, reply_markup=reply_markup)
     except Exception as e:
@@ -799,7 +731,6 @@ async def show_bowling_menu(callback: CallbackQuery):
 
 
 async def request_amount(callback: CallbackQuery, state: FSMContext, betting_game: BettingGame):
-    """Запросить сумму ставки"""
     bet_type = callback.data.split('_', 2)[2]
     user_id = callback.from_user.id
 
@@ -833,7 +764,6 @@ async def request_amount(callback: CallbackQuery, state: FSMContext, betting_gam
 
 
 async def process_bet_amount(message: Message, state: FSMContext, betting_game: BettingGame):
-    """Обработать сумму ставки и начать игру"""
     user_id = message.from_user.id
 
     if user_id not in betting_game.pending_bets:
@@ -899,7 +829,6 @@ async def process_bet_amount(message: Message, state: FSMContext, betting_game: 
             else:
                 await play_single_dice_game(message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message)
         except Exception as e:
-            # Возврат только если send_dice упал ДО броска
             logging.error(f"Ошибка при отправке кубика (до броска): {e}")
             betting_game.add_balance(user_id, amount)
             try:
@@ -923,7 +852,6 @@ async def process_bet_amount(message: Message, state: FSMContext, betting_game: 
 
 
 async def cancel_bet(callback: CallbackQuery, state: FSMContext, betting_game: BettingGame):
-    """Отмена ставки - возврат в меню игр"""
     user_id = callback.from_user.id
     if user_id in betting_game.pending_bets:
         del betting_game.pending_bets[user_id]
