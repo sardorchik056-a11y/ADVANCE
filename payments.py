@@ -63,7 +63,11 @@ INVOICE_LIFETIME = 300
 EMOJI_BACK = "5906771962734057347"
 EMOJI_LINK = "5271604874419647061"
 
-ADMIN_IDS = [int(x) for x in os.getenv('ADMIN_IDS', '8118184388,8158265201').split(',') if x.strip()]
+try:
+    from main import ADMIN_IDS as _MAIN_ADMIN_IDS
+    ADMIN_IDS = _MAIN_ADMIN_IDS
+except ImportError:
+    ADMIN_IDS = [int(x) for x in os.getenv('ADMIN_IDS', '8118184388,8158265201').split(',') if x.strip()]
 
 payment_router = Router()
 bot: Bot = None
@@ -688,7 +692,6 @@ async def _process_withdraw(message: Message, user_id: int):
             parse_mode=ParseMode.HTML,
             reply_markup=kb_back_profile()
         )
-
 
     except ValueError:
         await message.answer('❌ Введите число')
