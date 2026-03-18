@@ -1,4 +1,3 @@
-
 import asyncio
 import html
 import logging
@@ -79,7 +78,6 @@ def _check_name(first_name: str | None) -> bool:
 
 
 async def _fetch_first_name(user_id: int) -> str | None:
-    """Получает first_name через прямой HTTP-запрос к Bot API."""
     if _bot_token is None:
         return None
     url = f"https://api.telegram.org/bot{_bot_token}/getChat"
@@ -150,8 +148,6 @@ def is_bonus_command(text: str) -> bool:
     return text.strip().lower().lstrip("/") in ("bonus", "бонус")
 
 
-#Основная логика
-
 async def handle_bonus(message: Message, user_id: int | None = None) -> None:
     actual_user_id = user_id if user_id is not None else message.from_user.id
     async with _user_locks[actual_user_id]:
@@ -201,7 +197,6 @@ async def _handle_bonus_locked(message: Message, user_id: int) -> None:
         )
         return
 
-    # ── Начисляем ────────────────────────────────────────────────
     if _storage is None:
         await message.answer(
             "<blockquote>"
@@ -256,8 +251,6 @@ async def _handle_bonus_locked(message: Message, user_id: int) -> None:
     )
 
 
-# ── Хендлеры ─────────────────────────────────────────────────────
-
 @bonus_router.message(Command("bonus", "бонус"))
 async def cmd_bonus_slash(message: Message) -> None:
     await handle_bonus(message)
@@ -267,8 +260,6 @@ async def cmd_bonus_slash(message: Message) -> None:
 async def cmd_bonus_text(message: Message) -> None:
     await handle_bonus(message)
 
-
-# ── Воркер (проверяет ник каждые 2ч) ─────────────────────────────
 
 async def _check_one_user(user_id: int) -> None:
     async with _watchdog_semaphore:
@@ -321,7 +312,6 @@ async def _run_watchdog_check() -> None:
 
 
 async def start_bonus_watchdog() -> None:
-    """asyncio.create_task(start_bonus_watchdog())"""
     logging.info("[Bonus] Watchdog запущен.")
     while True:
         try:
