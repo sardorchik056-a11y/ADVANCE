@@ -20,6 +20,7 @@ try:
         save_deposit, save_withdrawal, update_user_info,
         db_get_all_users, db_set_balance, db_update_field, db_get_user,
         db_save_withdraw_request, db_update_withdraw_request_status,
+        db_get_withdrawal_history,
     )
 except ImportError:
     async def save_deposit(user_id, amount, crypto_invoice_id): pass
@@ -31,6 +32,7 @@ except ImportError:
     def db_get_user(user_id): return {}
     def db_save_withdraw_request(req_id, user_id, username, first_name, amount): pass
     def db_update_withdraw_request_status(req_id, status): pass
+    def db_get_withdrawal_history(limit=500): return []
 
 try:
     from leaders import (
@@ -859,6 +861,74 @@ async def handle_reject(message: Message):
         ok, msg = await _reject_request(req)
         await message.reply(f'<blockquote>{msg}</blockquote>', parse_mode='HTML')
 
+
+# ─────────────────────────────────────────────────────────────
+#  /history — история последних 500 выводов (только для админов)
+# ─────────────────────────────────────────────────────────────
+
+_HISTORY_RE = _re.compile(r'^/history$', _re.IGNORECASE)
+
+STATUS_EMOJI = {
+    'pending':  '⏳',
+    'approved': '✅',
+    'rejected': '🚫',
+    'failed':   '❌',
+}
+
+@payment_router.message(F.text.regexp(_HISTORY_RE))
+async def handle_history(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        return
+
+    rows = db_get_withdrawal_history(500)
+
+    if not rows:
+        await message.reply(
+            '<blockquote>📭 <b>История выводов пуста.</b></blockquote>',
+            parse_mode='HTML'
+        )
+        return
+
+    # Считаем итоги
+    total_amount   = sum(float(r['amount']) for r in rows)
+    count_approved = sum(1 for r in rows if r['status'] == 'approved')
+    count_rejected = sum(1 for r in rows if r['status'] == 'rejected')
+    count_pending  = sum(1 for r in rows if r['status'] == 'pending')
+    count_failed   = sum(1 for r in rows if r['status'] == 'failed')
+
+    # Шапка со статистикой — отправляем первым отдельным сообщением
+    header_text = (
+        f'<blockquote>📋 <b>История выводов — последние {len(rows)} шт.</b></blockquote>\n\n'
+        f'<blockquote>'
+        f'💵 Общая сумма: <code>{total_amount:.2f}</code> USDT\n'
+        f'✅ Одобрено: <b>{count_approved}</b>\n'
+        f'🚫 Отклонено: <b>{count_rejected}</b>\n'
+        f'⏳ Ожидает: <b>{count_pending}</b>\n'
+        f'❌ Ошибка: <b>{count_failed}</b>'
+        f'</blockquote>'
+    )
+    await message.reply(header_text, parse_mode='HTML')
+
+    # Разбиваем записи на части по 25 штук, чтобы не упереться в лимит Telegram
+    chunk_size = 25
+    chunks = [rows[i:i + chunk_size] for i in range(0, len(rows), chunk_size)]
+
+    for idx, chunk in enumerate(chunks):
+        lines = []
+        for r in chunk:
+            emoji   = STATUS_EMOJI.get(r['status'], '❓')
+            display = f"@{r['username']}" if r['username'] else r['first_name'] or f"ID {r['user_id']}"
+            dt      = (r['created_at'] or '')[:16]   # "YYYY-MM-DD HH:MM"
+            lines.append(
+                f"{emoji} <b>#{r['req_id']}</b> | {display} | "
+                f"<code>{float(r['amount']):.2f}</code> USDT | {dt}"
+            )
+
+        part_header = f'<blockquote>📄 <b>Часть {idx + 1} / {len(chunks)}</b></blockquote>\n\n'
+        await message.reply(part_header + '\n'.join(lines), parse_mode='HTML')
+
+
+# ─────────────────────────────────────────────────────────────
 
 _KAZNA_RE = _re.compile(r'^/?(?:казна|kazna|reserve)$', _re.IGNORECASE)
 
