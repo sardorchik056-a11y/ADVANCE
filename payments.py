@@ -20,7 +20,7 @@ try:
         save_deposit, save_withdrawal, update_user_info,
         db_get_all_users, db_set_balance, db_update_field, db_get_user,
         db_save_withdraw_request, db_update_withdraw_request_status,
-        db_get_withdrawal_history,
+        db_get_withdrawal_history, db_get_bot_stats,
     )
 except ImportError:
     async def save_deposit(user_id, amount, crypto_invoice_id): pass
@@ -33,6 +33,7 @@ except ImportError:
     def db_save_withdraw_request(req_id, user_id, username, first_name, amount): pass
     def db_update_withdraw_request_status(req_id, status): pass
     def db_get_withdrawal_history(limit=500): return []
+    def db_get_bot_stats(): return {}
 
 try:
     from leaders import (
@@ -59,8 +60,7 @@ MIN_DEPOSIT    = 0.1
 MIN_WITHDRAWAL = 2.0
 
 WITHDRAWAL_COOLDOWN = 180
-
-INVOICE_LIFETIME = 300
+INVOICE_LIFETIME    = 300
 
 EMOJI_BACK = "5906771962734057347"
 EMOJI_LINK = "5271604874419647061"
@@ -89,13 +89,13 @@ class WithdrawRequest:
         self.created_at = datetime.now()
         self.status     = 'pending'
 
+
 class WithdrawQueue:
     def __init__(self):
         self._requests: Dict[int, WithdrawRequest] = {}
         self._counter  = 0
 
-    def add(self, user_id: int, username: str,
-            first_name: str, amount: float) -> int:
+    def add(self, user_id: int, username: str, first_name: str, amount: float) -> int:
         self._counter += 1
         req = WithdrawRequest(self._counter, user_id, username, first_name, amount)
         self._requests[self._counter] = req
@@ -113,6 +113,7 @@ class WithdrawQueue:
 
     def all_ids(self) -> list:
         return list(self._requests.keys())
+
 
 withdraw_queue = WithdrawQueue()
 
@@ -308,14 +309,14 @@ class Storage:
         invoice_id = str(uuid.uuid4())
         expires_at = datetime.now() + timedelta(seconds=INVOICE_LIFETIME)
         self.invoices[invoice_id] = {
-            'user_id': user_id,
-            'amount': amount,
-            'crypto_id': crypto_id,
-            'pay_url': pay_url,
+            'user_id':    user_id,
+            'amount':     amount,
+            'crypto_id':  crypto_id,
+            'pay_url':    pay_url,
             'expires_at': expires_at,
-            'status': 'pending',
+            'status':     'pending',
             'message_id': None,
-            'chat_id': None
+            'chat_id':    None,
         }
         return invoice_id
 
@@ -328,7 +329,7 @@ class Storage:
 
     def set_message_info(self, invoice_id: str, chat_id: int, message_id: int):
         if invoice_id in self.invoices:
-            self.invoices[invoice_id]['chat_id'] = chat_id
+            self.invoices[invoice_id]['chat_id']    = chat_id
             self.invoices[invoice_id]['message_id'] = message_id
 
 
@@ -675,8 +676,7 @@ async def _process_withdraw(message: Message, user_id: int):
 
         username   = message.from_user.username or ''
         first_name = message.from_user.first_name or ''
-
-        req_id = withdraw_queue.add(user_id, username, first_name, amount)
+        req_id     = withdraw_queue.add(user_id, username, first_name, amount)
 
         user_data = storage.get_user(user_id)
         user_name = _get_user_display_name(user_data, user_id)
@@ -762,6 +762,8 @@ async def _reject_request(req: WithdrawRequest) -> tuple:
     return True, f'🚫 Заявка #{req.req_id} отклонена | {display} | {req.amount} USDT'
 
 
+# ─── /checkw ───────────────────────────────────────────────────────────────────
+
 _CHECKW_RE = _re.compile(r'^/checkw$', _re.IGNORECASE)
 
 @payment_router.message(F.text.regexp(_CHECKW_RE))
@@ -796,6 +798,8 @@ async def handle_checkw(message: Message):
     await message.reply(text, parse_mode='HTML')
 
 
+# ─── /type ─────────────────────────────────────────────────────────────────────
+
 _TYPE_RE = _re.compile(r'^/type\s+(?:#(\d+)|(all))$', _re.IGNORECASE)
 
 @payment_router.message(F.text.regexp(_TYPE_RE))
@@ -803,9 +807,9 @@ async def handle_type(message: Message):
     if message.from_user.id not in ADMIN_IDS:
         return
 
-    m = _TYPE_RE.match(message.text.strip())
-    is_all  = bool(m.group(2))
-    req_id  = int(m.group(1)) if m.group(1) else None
+    m      = _TYPE_RE.match(message.text.strip())
+    is_all = bool(m.group(2))
+    req_id = int(m.group(1)) if m.group(1) else None
 
     if is_all:
         pending = withdraw_queue.pending()
@@ -829,6 +833,8 @@ async def handle_type(message: Message):
         await message.reply(f'<blockquote>{msg}</blockquote>', parse_mode='HTML')
 
 
+# ─── /reject ───────────────────────────────────────────────────────────────────
+
 _REJECT_RE = _re.compile(r'^/reject\s+(?:#(\d+)|(all))$', _re.IGNORECASE)
 
 @payment_router.message(F.text.regexp(_REJECT_RE))
@@ -836,7 +842,7 @@ async def handle_reject(message: Message):
     if message.from_user.id not in ADMIN_IDS:
         return
 
-    m = _REJECT_RE.match(message.text.strip())
+    m      = _REJECT_RE.match(message.text.strip())
     is_all = bool(m.group(2))
     req_id = int(m.group(1)) if m.group(1) else None
 
@@ -862,18 +868,10 @@ async def handle_reject(message: Message):
         await message.reply(f'<blockquote>{msg}</blockquote>', parse_mode='HTML')
 
 
-# ─────────────────────────────────────────────────────────────
-#  /history — история последних 500 выводов (только для админов)
-# ─────────────────────────────────────────────────────────────
+# ─── /history ──────────────────────────────────────────────────────────────────
 
-_HISTORY_RE = _re.compile(r'^/history$', _re.IGNORECASE)
-
-STATUS_EMOJI = {
-    'pending':  '⏳',
-    'approved': '✅',
-    'rejected': '🚫',
-    'failed':   '❌',
-}
+_HISTORY_RE  = _re.compile(r'^/history$', _re.IGNORECASE)
+STATUS_EMOJI = {'pending': '⏳', 'approved': '✅', 'rejected': '🚫', 'failed': '❌'}
 
 @payment_router.message(F.text.regexp(_HISTORY_RE))
 async def handle_history(message: Message):
@@ -881,7 +879,6 @@ async def handle_history(message: Message):
         return
 
     rows = db_get_withdrawal_history(500)
-
     if not rows:
         await message.reply(
             '<blockquote>📭 <b>История выводов пуста.</b></blockquote>',
@@ -889,15 +886,13 @@ async def handle_history(message: Message):
         )
         return
 
-    # Считаем итоги
     total_amount   = sum(float(r['amount']) for r in rows)
     count_approved = sum(1 for r in rows if r['status'] == 'approved')
     count_rejected = sum(1 for r in rows if r['status'] == 'rejected')
     count_pending  = sum(1 for r in rows if r['status'] == 'pending')
     count_failed   = sum(1 for r in rows if r['status'] == 'failed')
 
-    # Шапка со статистикой — отправляем первым отдельным сообщением
-    header_text = (
+    await message.reply(
         f'<blockquote>📋 <b>История выводов — последние {len(rows)} шт.</b></blockquote>\n\n'
         f'<blockquote>'
         f'💵 Общая сумма: <code>{total_amount:.2f}</code> USDT\n'
@@ -905,30 +900,117 @@ async def handle_history(message: Message):
         f'🚫 Отклонено: <b>{count_rejected}</b>\n'
         f'⏳ Ожидает: <b>{count_pending}</b>\n'
         f'❌ Ошибка: <b>{count_failed}</b>'
-        f'</blockquote>'
+        f'</blockquote>',
+        parse_mode='HTML'
     )
-    await message.reply(header_text, parse_mode='HTML')
 
-    # Разбиваем записи на части по 25 штук, чтобы не упереться в лимит Telegram
     chunk_size = 25
     chunks = [rows[i:i + chunk_size] for i in range(0, len(rows), chunk_size)]
-
     for idx, chunk in enumerate(chunks):
         lines = []
         for r in chunk:
             emoji   = STATUS_EMOJI.get(r['status'], '❓')
             display = f"@{r['username']}" if r['username'] else r['first_name'] or f"ID {r['user_id']}"
-            dt      = (r['created_at'] or '')[:16]   # "YYYY-MM-DD HH:MM"
+            dt      = (r['created_at'] or '')[:16]
             lines.append(
                 f"{emoji} <b>#{r['req_id']}</b> | {display} | "
                 f"<code>{float(r['amount']):.2f}</code> USDT | {dt}"
             )
+        await message.reply(
+            f'<blockquote>📄 <b>Часть {idx + 1} / {len(chunks)}</b></blockquote>\n\n' + '\n'.join(lines),
+            parse_mode='HTML'
+        )
 
-        part_header = f'<blockquote>📄 <b>Часть {idx + 1} / {len(chunks)}</b></blockquote>\n\n'
-        await message.reply(part_header + '\n'.join(lines), parse_mode='HTML')
+
+# ─── /botstats ─────────────────────────────────────────────────────────────────
+
+_BOTSTATS_RE = _re.compile(r'^/botstats$', _re.IGNORECASE)
+
+@payment_router.message(F.text.regexp(_BOTSTATS_RE))
+async def handle_botstats(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        return
+
+    # Получаем статистику из БД
+    s = db_get_bot_stats()
+
+    # Получаем информацию о боте через Telegram API
+    try:
+        bot_info = await message.bot.get_me()
+        bot_name     = bot_info.full_name
+        bot_username = f"@{bot_info.username}"
+        bot_id       = bot_info.id
+    except Exception:
+        bot_name     = "—"
+        bot_username = "—"
+        bot_id       = "—"
+
+    # Прибыль/убыток
+    profit = s['profit']
+    if profit > 0:
+        profit_line = f'✅ Прибыль: <b><code>+{profit:.2f}</code> USDT</b>'
+    elif profit < 0:
+        profit_line = f'🔴 Убыток: <b><code>{profit:.2f}</code> USDT</b>'
+    else:
+        profit_line = f'➖ Баланс нулевой: <b><code>0.00</code> USDT</b>'
+
+    # Топ депозиторов
+    top_lines = []
+    medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣']
+    for i, dep in enumerate(s['top_depositors']):
+        name = dep.get('first_name') or dep.get('username') or f"ID {dep.get('user_id', '?')}"
+        uname = f" (@{dep['username']})" if dep.get('username') else ""
+        top_lines.append(
+            f"{medals[i]} {name}{uname} — <code>{dep['dep_sum']:.2f}</code> USDT"
+        )
+    top_block = '\n'.join(top_lines) if top_lines else 'Нет данных'
+
+    now_str = datetime.now().strftime('%d.%m.%Y %H:%M')
+
+    text = (
+        f'<blockquote>📊 <b>Статистика бота</b></blockquote>\n\n'
+
+        f'<blockquote>'
+        f'🤖 <b>ТГ информация</b>\n'
+        f'├ Имя: <b>{bot_name}</b>\n'
+        f'├ Username: <b>{bot_username}</b>\n'
+        f'└ ID: <code>{bot_id}</code>'
+        f'</blockquote>\n\n'
+
+        f'<blockquote>'
+        f'👥 <b>Пользователи</b>\n'
+        f'├ Всего: <b><code>{s["total_users"]}</code></b>\n'
+        f'├ Новых сегодня: <b><code>{s["new_users_today"]}</code></b>\n'
+        f'├ Новых за 7 дней: <b><code>{s["new_users_week"]}</code></b>\n'
+        f'└ Активных сегодня: <b><code>{s["active_today"]}</code></b>'
+        f'</blockquote>\n\n'
+
+        f'<blockquote>'
+        f'💳 <b>Финансы</b>\n'
+        f'├ Депозитов всего: <b><code>{s["total_deposits"]:.2f}</code> USDT</b> ({s["deposits_count"]} шт.)\n'
+        f'├ Депозитов сегодня: <b><code>{s["deposits_today"]:.2f}</code> USDT</b>\n'
+        f'├ Выводов всего: <b><code>{s["total_withdrawals"]:.2f}</code> USDT</b> ({s["withdrawals_count"]} шт.)\n'
+        f'├ Выводов сегодня: <b><code>{s["withdrawals_today"]:.2f}</code> USDT</b>\n'
+        f'└ {profit_line}'
+        f'</blockquote>\n\n'
+
+        f'<blockquote>'
+        f'⏳ <b>Ожидают вывода</b>\n'
+        f'└ {s["pending_withdrawals"]} заявок на <code>{s["pending_amount"]:.2f}</code> USDT'
+        f'</blockquote>\n\n'
+
+        f'<blockquote>'
+        f'🏆 <b>Топ-5 по депозитам</b>\n'
+        f'{top_block}'
+        f'</blockquote>\n\n'
+
+        f'<i>🕐 Обновлено: {now_str}</i>'
+    )
+
+    await message.reply(text, parse_mode='HTML')
 
 
-# ─────────────────────────────────────────────────────────────
+# ─── казна ─────────────────────────────────────────────────────────────────────
 
 _KAZNA_RE = _re.compile(r'^/?(?:казна|kazna|reserve)$', _re.IGNORECASE)
 
@@ -956,8 +1038,8 @@ async def handle_kazna(message: Message):
     ton  = bal_map.get('TON',  0.0)
     trx  = bal_map.get('TRX',  0.0)
 
-    ton_rate  = rates.get('TON', 0.0)
-    trx_rate  = rates.get('TRX', 0.0)
+    ton_rate = rates.get('TON', 0.0)
+    trx_rate = rates.get('TRX', 0.0)
 
     usdt_usd  = usdt
     ton_usd   = ton * ton_rate
