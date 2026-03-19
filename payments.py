@@ -968,17 +968,17 @@ async def handle_botstats(message: Message):
     now_str = datetime.now().strftime('%d.%m.%Y %H:%M')
 
     text = (
-        f'<blockquote>📊 <b>Статистика бота</b></blockquote>\n\n'
+        f'<blockquote><tg-emoji emoji-id="5197434882321567830">💰</tg-emoji><b>Статистика бота</b></blockquote>\n\n'
 
         f'<blockquote>'
-        f'🤖 <b>ТГ информация</b>\n'
+        f'<tg-emoji emoji-id="5334544901428229844">💰</tg-emoji><b>ТГ информация</b>\n'
         f'├ Имя: <b>{bot_name}</b>\n'
         f'├ Username: <b>{bot_username}</b>\n'
         f'└ ID: <code>{bot_id}</code>'
         f'</blockquote>\n\n'
 
         f'<blockquote>'
-        f'👥 <b>Пользователи</b>\n'
+        f'<tg-emoji emoji-id="5906581476639513176">💰</tg-emoji> <b>Пользователи</b>\n'
         f'├ Всего: <b><code>{s["total_users"]}</code></b>\n'
         f'├ Новых сегодня: <b><code>{s["new_users_today"]}</code></b>\n'
         f'├ Новых за 7 дней: <b><code>{s["new_users_week"]}</code></b>\n'
@@ -986,7 +986,7 @@ async def handle_botstats(message: Message):
         f'</blockquote>\n\n'
 
         f'<blockquote>'
-        f'💳 <b>Финансы</b>\n'
+        f'<tg-emoji emoji-id="5402186569006210455">💰</tg-emoji> <b>Финансы</b>\n'
         f'├ Депозитов всего: <b><code>{s["total_deposits"]:.2f}</code> USDT</b> ({s["deposits_count"]} шт.)\n'
         f'├ Депозитов сегодня: <b><code>{s["deposits_today"]:.2f}</code> USDT</b>\n'
         f'├ Выводов всего: <b><code>{s["total_withdrawals"]:.2f}</code> USDT</b> ({s["withdrawals_count"]} шт.)\n'
@@ -1000,11 +1000,11 @@ async def handle_botstats(message: Message):
         f'</blockquote>\n\n'
 
         f'<blockquote>'
-        f'🏆 <b>Топ-5 по депозитам</b>\n'
+        f'<tg-emoji emoji-id="5440539497383087970">💰</tg-emoji> <b>Топ-5 по депозитам</b>\n'
         f'{top_block}'
         f'</blockquote>\n\n'
 
-        f'<i>🕐 Обновлено: {now_str}</i>'
+        f'<i><tg-emoji emoji-id="5386367538735104399">💰</tg-emoji> Обновлено: {now_str}</i>'
     )
 
     await message.reply(text, parse_mode='HTML')
