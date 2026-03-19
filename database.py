@@ -401,6 +401,116 @@ def db_get_withdrawal_history(limit: int = 500) -> list:
         return []
 
 
+def db_get_bot_stats() -> dict:
+    """
+    Возвращает полную статистику бота для команды /botstats.
+    """
+    result = {
+        "total_deposits":      0.0,
+        "total_withdrawals":   0.0,
+        "deposits_count":      0,
+        "withdrawals_count":   0,
+        "total_users":         0,
+        "new_users_today":     0,
+        "new_users_week":      0,
+        "active_today":        0,
+        "pending_withdrawals": 0,
+        "pending_amount":      0.0,
+        "top_depositors":      [],
+        "profit":              0.0,
+        "deposits_today":      0.0,
+        "withdrawals_today":   0.0,
+    }
+    try:
+        today = datetime.now().strftime("%Y-%m-%d")
+        with _connect() as conn:
+
+            # Все депозиты (всего)
+            row = conn.execute(
+                "SELECT COALESCE(SUM(amount),0), COUNT(*) FROM deposits"
+            ).fetchone()
+            result["total_deposits"] = float(row[0])
+            result["deposits_count"] = int(row[1])
+
+            # Депозиты сегодня
+            row = conn.execute(
+                "SELECT COALESCE(SUM(amount),0) FROM deposits WHERE date(created_at)=?",
+                (today,)
+            ).fetchone()
+            result["deposits_today"] = float(row[0])
+
+            # Одобренные выводы (всего)
+            row = conn.execute("""
+                SELECT COALESCE(SUM(amount),0), COUNT(*)
+                FROM withdraw_requests WHERE status='approved'
+            """).fetchone()
+            result["total_withdrawals"] = float(row[0])
+            result["withdrawals_count"] = int(row[1])
+
+            # Выводы сегодня (одобренные)
+            row = conn.execute("""
+                SELECT COALESCE(SUM(amount),0)
+                FROM withdraw_requests
+                WHERE status='approved' AND date(updated_at)=?
+            """, (today,)).fetchone()
+            result["withdrawals_today"] = float(row[0])
+
+            # Прибыль/убыток
+            result["profit"] = round(result["total_deposits"] - result["total_withdrawals"], 2)
+
+            # Всего пользователей
+            row = conn.execute("SELECT COUNT(*) FROM users").fetchone()
+            result["total_users"] = int(row[0])
+
+            # Новые сегодня
+            row = conn.execute(
+                "SELECT COUNT(*) FROM users WHERE join_date=?", (today,)
+            ).fetchone()
+            result["new_users_today"] = int(row[0])
+
+            # Новые за 7 дней
+            row = conn.execute("""
+                SELECT COUNT(*) FROM users
+                WHERE join_date >= date('now','-6 days')
+            """).fetchone()
+            result["new_users_week"] = int(row[0])
+
+            # Активные сегодня (делали депозит или вывод)
+            row = conn.execute("""
+                SELECT COUNT(DISTINCT user_id) FROM (
+                    SELECT user_id FROM deposits WHERE date(created_at)=?
+                    UNION
+                    SELECT user_id FROM withdrawals WHERE date(created_at)=?
+                )
+            """, (today, today)).fetchone()
+            result["active_today"] = int(row[0])
+
+            # Pending-заявки
+            row = conn.execute("""
+                SELECT COUNT(*), COALESCE(SUM(amount),0)
+                FROM withdraw_requests WHERE status='pending'
+            """).fetchone()
+            result["pending_withdrawals"] = int(row[0])
+            result["pending_amount"]      = float(row[1])
+
+            # Топ-5 по депозитам
+            rows = conn.execute("""
+                SELECT u.first_name, u.username, d.user_id,
+                       COALESCE(SUM(d.amount), 0) AS dep_sum
+                FROM deposits d
+                LEFT JOIN users u ON u.user_id = d.user_id
+                GROUP BY d.user_id
+                ORDER BY dep_sum DESC
+                LIMIT 5
+            """).fetchall()
+            result["top_depositors"] = [dict(r) for r in rows]
+
+    except Exception as e:
+        logging.error(f"[DB] db_get_bot_stats: {e}")
+
+    return result
+
+
 async def register_referral(new_user_id: int, referrer_id: int):
     try:
         with _connect() as conn:
