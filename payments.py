@@ -968,7 +968,7 @@ async def handle_botstats(message: Message):
     now_str = datetime.now().strftime('%d.%m.%Y %H:%M')
 
     text = (
-        f'<blockquote><tg-emoji emoji-id="5197434882321567830">💰</tg-emoji><b>Статистика бота</b></blockquote>\n\n'
+        f'<blockquote><tg-emoji emoji-id="5231200819986047254">💰</tg-emoji><b>Статистика бота</b></blockquote>\n\n'
 
         f'<blockquote>'
         f'<tg-emoji emoji-id="5334544901428229844">💰</tg-emoji><b>ТГ информация</b>\n'
