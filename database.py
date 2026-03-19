@@ -333,6 +333,7 @@ async def save_withdrawal(user_id: int, amount: float):
     except Exception as e:
         logging.error(f"[DB] save_withdrawal user_id={user_id}: {e}")
 
+
 def db_save_withdraw_request(req_id: int, user_id: int, username: str,
                               first_name: str, amount: float) -> None:
     try:
@@ -373,6 +374,30 @@ def db_get_pending_withdraw_requests() -> list:
             return [dict(r) for r in cur.fetchall()]
     except Exception as e:
         logging.error(f"[DB] db_get_pending_withdraw_requests: {e}")
+        return []
+
+
+def db_get_withdrawal_history(limit: int = 500) -> list:
+    """Возвращает последние `limit` заявок на вывод из всех статусов."""
+    try:
+        with _connect() as conn:
+            cur = conn.execute("""
+                SELECT
+                    req_id,
+                    user_id,
+                    username,
+                    first_name,
+                    amount,
+                    status,
+                    created_at,
+                    updated_at
+                FROM withdraw_requests
+                ORDER BY created_at DESC
+                LIMIT ?
+            """, (limit,))
+            return [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        logging.error(f"[DB] db_get_withdrawal_history: {e}")
         return []
 
 
