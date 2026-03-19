@@ -115,18 +115,19 @@ PROMO_FILE   = "promos.json"
 MIN_TRANSFER = 0.02
 MAX_TRANSFER = 10000
 
-TRANSFER_PATTERN = re.compile(r'^(?:/)?(?:pay|дать)\s+([\d.,]+)$', re.IGNORECASE)
-GAMES_PATTERN    = re.compile(r'^/?(?:игры|games)$', re.IGNORECASE)
-DEP_PATTERN      = re.compile(
+TRANSFER_PATTERN  = re.compile(r'^(?:/)?(?:pay|дать)\s+([\d.,]+)$', re.IGNORECASE)
+GAMES_PATTERN     = re.compile(r'^/?(?:игры|games)$', re.IGNORECASE)
+DEP_PATTERN       = re.compile(
     r'^/?(?:деп|пополнить|депозит|dep|deposit)\s+(\d+(?:\.\d+)?)$',
     re.IGNORECASE
 )
-GOLD_PATTERN    = re.compile(r'^/?(?:gold|золото)\s+[\d.,]+$', re.IGNORECASE)
-KAZNA_PATTERN   = re.compile(r'^/?(?:казна|kazna|reserve)$', re.IGNORECASE)
-CHECKW_PATTERN  = re.compile(r'^/checkw$', re.IGNORECASE)
-TYPE_PATTERN    = re.compile(r'^/type\s+(?:#\d+|all)$', re.IGNORECASE)
-REJECT_PATTERN  = re.compile(r'^/reject\s+(?:#\d+|all)$', re.IGNORECASE)
-HISTORY_PATTERN = re.compile(r'^/history$', re.IGNORECASE)
+GOLD_PATTERN      = re.compile(r'^/?(?:gold|золото)\s+[\d.,]+$', re.IGNORECASE)
+KAZNA_PATTERN     = re.compile(r'^/?(?:казна|kazna|reserve)$', re.IGNORECASE)
+CHECKW_PATTERN    = re.compile(r'^/checkw$', re.IGNORECASE)
+TYPE_PATTERN      = re.compile(r'^/type\s+(?:#\d+|all)$', re.IGNORECASE)
+REJECT_PATTERN    = re.compile(r'^/reject\s+(?:#\d+|all)$', re.IGNORECASE)
+HISTORY_PATTERN   = re.compile(r'^/history$', re.IGNORECASE)
+BOTSTATS_PATTERN  = re.compile(r'^/botstats$', re.IGNORECASE)
 
 _transfer_locks: dict = {}
 
@@ -470,14 +471,12 @@ async def cmd_add_balance(message: Message):
 
     if target_input.startswith("@"):
         username_clean = target_input.lstrip("@").lower()
-
         for uid, udata in storage.users.items():
             stored = (udata.get("username") or "").lstrip("@").lower()
             if stored and stored == username_clean:
                 target_id   = int(uid)
                 target_name = udata.get("first_name") or udata.get("username") or str(uid)
                 break
-
         if target_id is None:
             await message.answer(
                 f"❌ Пользователь <code>{target_input}</code> не найден в базе.\n"
@@ -848,6 +847,11 @@ async def handle_reject_main(message: Message):
 async def handle_history_main(message: Message):
     from payments import handle_history
     await handle_history(message)
+
+@router.message(F.text.regexp(BOTSTATS_PATTERN))
+async def handle_botstats_main(message: Message):
+    from payments import handle_botstats
+    await handle_botstats(message)
 
 
 @router.message(F.text)
