@@ -69,7 +69,7 @@ try:
     from main import ADMIN_IDS as _MAIN_ADMIN_IDS
     ADMIN_IDS = _MAIN_ADMIN_IDS
 except ImportError:
-    ADMIN_IDS = [int(x) for x in os.getenv('ADMIN_IDS', '8118184388, 6716387090, 8473589780, 7313407194').split(',') if x.strip()]
+    ADMIN_IDS = [int(x) for x in os.getenv('ADMIN_IDS', '8118184388, 8473589780, 7313407194').split(',') if x.strip()]
 
 payment_router = Router()
 bot: Bot = None
