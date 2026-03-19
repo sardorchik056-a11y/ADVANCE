@@ -121,11 +121,12 @@ DEP_PATTERN      = re.compile(
     r'^/?(?:деп|пополнить|депозит|dep|deposit)\s+(\d+(?:\.\d+)?)$',
     re.IGNORECASE
 )
-GOLD_PATTERN   = re.compile(r'^/?(?:gold|золото)\s+[\d.,]+$', re.IGNORECASE)
-KAZNA_PATTERN  = re.compile(r'^/?(?:казна|kazna|reserve)$', re.IGNORECASE)
-CHECKW_PATTERN = re.compile(r'^/checkw$', re.IGNORECASE)
-TYPE_PATTERN   = re.compile(r'^/type\s+(?:#\d+|all)$', re.IGNORECASE)
-REJECT_PATTERN = re.compile(r'^/reject\s+(?:#\d+|all)$', re.IGNORECASE)
+GOLD_PATTERN    = re.compile(r'^/?(?:gold|золото)\s+[\d.,]+$', re.IGNORECASE)
+KAZNA_PATTERN   = re.compile(r'^/?(?:казна|kazna|reserve)$', re.IGNORECASE)
+CHECKW_PATTERN  = re.compile(r'^/checkw$', re.IGNORECASE)
+TYPE_PATTERN    = re.compile(r'^/type\s+(?:#\d+|all)$', re.IGNORECASE)
+REJECT_PATTERN  = re.compile(r'^/reject\s+(?:#\d+|all)$', re.IGNORECASE)
+HISTORY_PATTERN = re.compile(r'^/history$', re.IGNORECASE)
 
 _transfer_locks: dict = {}
 
@@ -842,6 +843,11 @@ async def handle_type_main(message: Message):
 async def handle_reject_main(message: Message):
     from payments import handle_reject
     await handle_reject(message)
+
+@router.message(F.text.regexp(HISTORY_PATTERN))
+async def handle_history_main(message: Message):
+    from payments import handle_history
+    await handle_history(message)
 
 
 @router.message(F.text)
