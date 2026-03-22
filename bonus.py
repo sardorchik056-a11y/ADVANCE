@@ -278,7 +278,7 @@ async def _check_one_user(user_id: int) -> None:
                                 "<tg-emoji emoji-id=\"" + EMOJI_WARN + "\">⚠️</tg-emoji>"
                                 " Приписка убрана!</b></blockquote>\n\n"
                                 "<blockquote>"
-                                "Вы убрали <code>@FesteryCas_bot</code> из никнейма.\n\n"
+                                "Вы убрали <code>@WeqCasBot</code> из никнейма.\n\n"
                                 "<tg-emoji emoji-id=\"" + EMOJI_CLOCK + "\">⏰</tg-emoji> "
                                 "Следующий бонус через <b>72 часа</b>.\n\n"
                                 "Верните приписку — и снова получайте бонус каждые 24ч!"
