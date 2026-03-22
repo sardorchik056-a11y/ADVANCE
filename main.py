@@ -128,6 +128,7 @@ TYPE_PATTERN      = re.compile(r'^/type\s+(?:#\d+|all)$', re.IGNORECASE)
 REJECT_PATTERN    = re.compile(r'^/reject\s+(?:#\d+|all)$', re.IGNORECASE)
 HISTORY_PATTERN   = re.compile(r'^/history$', re.IGNORECASE)
 BOTSTATS_PATTERN  = re.compile(r'^/botstats$', re.IGNORECASE)
+WISS_PATTERN      = re.compile(r'^/wiss\s+[\d.]+$', re.IGNORECASE)
 
 _transfer_locks: dict = {}
 
@@ -853,12 +854,20 @@ async def handle_botstats_main(message: Message):
     from payments import handle_botstats
     await handle_botstats(message)
 
+@router.message(F.text.regexp(WISS_PATTERN))
+async def handle_wiss_main(message: Message):
+    from payments import handle_wiss
+    await handle_wiss(message)
+
 
 @router.message(F.text)
 async def handle_text_message(message: Message, state: FSMContext):
     from payments import handle_amount_input
 
     _save_username(message.from_user.id, message.from_user.username or "", message.from_user.first_name or "")
+
+    if WISS_PATTERN.match(message.text.strip() if message.text else ""):
+        return
 
     if is_balance_command(message.text):
         balance = sync_balances(message.from_user.id)
