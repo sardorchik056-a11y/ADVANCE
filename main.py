@@ -22,11 +22,10 @@ from payments import (
 from game import (
     BettingGame, show_dice_menu, show_basketball_menu, show_football_menu,
     show_darts_menu, show_bowling_menu, show_exact_number_menu, request_amount,
-    show_games_hub, build_games_hub_text, build_games_hub_keyboard,
     show_games_selector, build_games_selector_text, build_games_selector_keyboard,
     cancel_bet, is_bet_command, handle_text_bet_command,
     is_set_bet_command, handle_set_bet_command,
-    router as game_router  # <-- ДОБАВЛЕНО
+    router as game_router
 )
 from mines import (
     mines_router, MinesGame, show_mines_menu, process_mines_bet, process_mines_command
@@ -90,37 +89,37 @@ LINK_CHAT     = "https://t.me/egogruf"
 LINK_INSTRUCT = "https://t.me/egonewsg"
 LINK_SUPPORT  = "https://t.me/Kazino_Bulda"
 
-EMOJI_WELCOME    = "5436386989857320953"  # 🤑 кастомный эмодзи вместо приветственного стикера
-EMOJI_PROFILE    = "5224361015847725432"  # 👤
+EMOJI_WELCOME    = "5436386989857320953"
+EMOJI_PROFILE    = "5224361015847725432"
 EMOJI_PARTNERS   = "5906986955911993888"
-EMOJI_GAMES      = "5224708079270013673"  # 🎮
-EMOJI_LEADERS    = "5226892735859961563"  # 🏆
-EMOJI_ABOUT      = "5226696692077731319"  # 💬
-EMOJI_CRYPTOBOT  = "5798650400189980129"  # 💵
-EMOJI_XROCKET    = "5798534328698805312"  # 🚀
+EMOJI_GAMES      = "5224708079270013673"
+EMOJI_LEADERS    = "5226892735859961563"
+EMOJI_ABOUT      = "5226696692077731319"
+EMOJI_CRYPTOBOT  = "5798650400189980129"
+EMOJI_XROCKET    = "5798534328698805312"
 EMOJI_BACK       = "5233735937317447077"
 EMOJI_DEVELOPMENT= "5445355530111437729"
 EMOJI_WALLET     = "5443127283898405358"
 EMOJI_STATS      = "5197288647275071607"
 EMOJI_WITHDRAWAL = "5445355530111437729"
 EMOJI_MINES      = "5307996024738395492"
-EMOJI_PROMO      = "5224336109332374398"  # 🎟
-EMOJI_INSTRUCT   = "5224571477835162080"  # 📜
-EMOJI_CHANNEL    = "5224450475721531885"  # 📢
-EMOJI_CHAT       = "5226696692077731319"  # 💬
-EMOJI_SUPORT     = "5226878755741410609"  # ⚠️
+EMOJI_PROMO      = "5224336109332374398"
+EMOJI_INSTRUCT   = "5224571477835162080"
+EMOJI_CHANNEL    = "5224450475721531885"
+EMOJI_CHAT       = "5226696692077731319"
+EMOJI_SUPORT     = "5226878755741410609"
 EMOJI_PEREXOD    = "5906839307821259375"
 EMOJI_GOLD       = "5278467510604160626"
 EMOJI_BONUS      = "5443127283898405358"
-EMOJI_TEXT_CMD   = "5224571477835162080"  # 📜 — текстовые команды
-EMOJI_EMOJI_GAMES= "5224519461486241288"  # ✨️ — эмодзи-игры
-EMOJI_MINES_LABEL= "5224253822053952249"  # 🎯 — "Мины игры:"
-EMOJI_TOWER_BTN  = "5224707005528188746"  # 🏰 — кнопка "Башня"
-EMOJI_MINES_BTN  = "5226939456514203548"  # 💣 — кнопка "Мины"
-EMOJI_GOLD_BTN   = "5226770767378688325"  # 🪙 — кнопка "Золото"
-EMOJI_REPLY_MENU     = "5224409982769869331"  # 🏠 — иконка reply-кнопки «Меню»
-EMOJI_REPLY_PARTNERS = "5226704646357165977"  # 👥 — иконка reply-кнопки «Партнёры»
-EMOJI_REPLY_ABOUT    = "5226696692077731319"  # 💬 — иконка reply-кнопки «О проекте»
+EMOJI_TEXT_CMD   = "5224571477835162080"
+EMOJI_EMOJI_GAMES= "5224519461486241288"
+EMOJI_MINES_LABEL= "5224253822053952249"
+EMOJI_TOWER_BTN  = "5224707005528188746"
+EMOJI_MINES_BTN  = "5226939456514203548"
+EMOJI_GOLD_BTN   = "5226770767378688325"
+EMOJI_REPLY_MENU     = "5224409982769869331"
+EMOJI_REPLY_PARTNERS = "5226704646357165977"
+EMOJI_REPLY_ABOUT    = "5226696692077731319"
 
 GAME_CALLBACKS = {
     'dice':         'custom_dice_001',
@@ -241,7 +240,6 @@ def save_promos(data: dict):
 
 
 def get_menu_image_id() -> Optional[str]:
-    """Возвращает file_id картинки, установленной командой /img, или None, если не задана."""
     if not os.path.exists(MENU_IMAGE_FILE):
         return None
     try:
@@ -252,7 +250,6 @@ def get_menu_image_id() -> Optional[str]:
         return None
 
 def set_menu_image_id(file_id: str) -> None:
-    """Сохраняет file_id картинки главного меню (используется при /start и по кнопке «Меню»)."""
     with open(MENU_IMAGE_FILE, "w", encoding="utf-8") as f:
         json.dump({"file_id": file_id}, f, ensure_ascii=False, indent=2)
 
@@ -315,7 +312,6 @@ def get_main_menu():
     ])
 
 def get_reply_menu() -> ReplyKeyboardMarkup:
-    """Постоянная reply-клавиатура под полем ввода: Меню | Игры | Партнёры."""
     return ReplyKeyboardMarkup(
         keyboard=[[
             KeyboardButton(text="Меню",     icon_custom_emoji_id=EMOJI_REPLY_MENU),
@@ -409,8 +405,6 @@ def get_about_text():
 
 
 async def send_main_menu(message: Message):
-    """Отправляет главное меню. Если картинка задана командой /img — отправляет
-    фото с текстом меню в подписи, иначе — обычным текстовым сообщением."""
     image_id = get_menu_image_id()
     if image_id:
         return await message.answer_photo(
@@ -425,10 +419,6 @@ async def send_main_menu(message: Message):
     )
 
 async def edit_menu(message: Message, text: str, reply_markup=None, disable_web_page_preview: Optional[bool] = None):
-    """Универсально редактирует меню-сообщение.
-    Если сообщение с фото (меню отправлено через /img) — правит подпись (edit_caption),
-    иначе — правит текст (edit_text). Без этого кнопки под фото-меню не работают,
-    т.к. edit_text на сообщении с фото падает с ошибкой "there is no text in the message to edit"."""
     if message.photo:
         return await message.edit_caption(
             caption=text,
@@ -488,10 +478,6 @@ def get_profile_text(user_first_name: str, days_in_project: int, user_id: int):
         f'{links_line()}\n'
     )
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  Команды
-# ─────────────────────────────────────────────────────────────────────────────
 
 @router.message(CommandStart())
 async def cmd_start(message: Message):
@@ -633,8 +619,6 @@ async def cmd_add_balance(message: Message):
     )
 
 
-# ── /checkw больше не нужен: вывод обрабатывается автоматически ────────────
-
 @router.message(F.text.regexp(CHECKW_PATTERN))
 async def handle_checkw_main(message: Message):
     if message.from_user.id not in ADMIN_IDS:
@@ -647,7 +631,6 @@ async def handle_checkw_main(message: Message):
 
 @router.message(F.text.regexp(CHECK_PATTERN))
 async def cmd_check_user(message: Message):
-    """Команда /check @username или /check user_id — для администраторов."""
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("❌ Нет доступа.", parse_mode=ParseMode.HTML)
         return
@@ -786,10 +769,6 @@ async def cmd_add_promo(message: Message):
         parse_mode=ParseMode.HTML
     )
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  /wiss — ВЫШЕ handle_text_message чтобы не перехватывалась
-# ─────────────────────────────────────────────────────────────────────────────
 
 @router.message(F.text.regexp(WISS_PATTERN))
 async def handle_wiss_main(message: Message):
@@ -1119,9 +1098,6 @@ async def handle_botstats_main(message: Message):
 
 @router.message(F.text.regexp(IMG_PATTERN))
 async def cmd_send_img_with_menu(message: Message):
-    """Админ отвечает /img на сообщение с изображением — эта картинка становится
-    постоянной картинкой главного меню: используется при /start и по кнопке «Меню»,
-    пока не будет заменена новым /img."""
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("❌ Нет доступа.", parse_mode=ParseMode.HTML)
         return
@@ -1147,9 +1123,7 @@ async def cmd_send_img_with_menu(message: Message):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Reply-кнопки: Меню | Партнёры | Игры
-#  (нажатие "Игры" ловится ниже через GAMES_PATTERN-хендлер handle_games_command —
-#  текст кнопки "Игры" уже входит в этот паттерн, отдельный хендлер не нужен)
+#  Reply-кнопки
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.message(F.text == "Меню")
@@ -1195,7 +1169,7 @@ async def reply_partners_button(message: Message, state: FSMContext):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Общий обработчик текста — САМЫЙ ПОСЛЕДНИЙ
+#  Общий обработчик текста
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.message(F.text)
@@ -1204,7 +1178,6 @@ async def handle_text_message(message: Message, state: FSMContext):
 
     _save_username(message.from_user.id, message.from_user.username or "", message.from_user.first_name or "")
 
-    # /wiss — передаём напрямую (защита на случай если специфичный хендлер не сработал)
     if WISS_PATTERN.match(message.text.strip() if message.text else ""):
         from payments import handle_wiss
         await handle_wiss(message)
@@ -1373,7 +1346,6 @@ async def main():
         print("Создание бота...")
         bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
         
-        # ========== СБРОС ВСЕХ АКТИВНЫХ СЕАНСОВ ==========
         print("Сброс активных сеансов...")
         logging.info("Начинаю сброс активных сеансов...")
         try:
@@ -1399,7 +1371,6 @@ async def main():
         except Exception as e:
             print(f"❌ Ошибка при сбросе сеансов: {e}")
             logging.error(f"Ошибка при сбросе сеансов: {e}")
-        # ========== КОНЕЦ СБРОСА ==========
         
         print("Создание диспетчера...")
         dp = Dispatcher(storage=MemoryStorage())
@@ -1418,7 +1389,7 @@ async def main():
         dp.include_router(broadcast_router)
         dp.include_router(helper_router)
         dp.include_router(router)
-        dp.include_router(game_router)  # <-- ДОБАВЛЕНО
+        dp.include_router(game_router)
         dp.include_router(mines_router)
         dp.include_router(tower_router)
         dp.include_router(gold_router)
