@@ -25,6 +25,7 @@ from game import (
     show_games_selector, build_games_selector_text, build_games_selector_keyboard,
     cancel_bet, is_bet_command, handle_text_bet_command,
     is_set_bet_command, handle_set_bet_command,
+    is_game_menu_command, handle_game_menu_command,
     router as game_router
 )
 from mines import (
@@ -1259,6 +1260,10 @@ async def handle_text_message(message: Message, state: FSMContext):
 
     if is_set_bet_command(message.text):
         await handle_set_bet_command(message, betting_game)
+        return
+
+    if is_game_menu_command(message.text):
+        await handle_game_menu_command(message, betting_game)
         return
 
     if is_bet_command(message.text):
