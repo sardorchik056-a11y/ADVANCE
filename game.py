@@ -130,6 +130,15 @@ BASKETBALL_BET_TYPES = {
 FOOTBALL_BET_TYPES = {
     'футбол_гол':  {'values': [3, 4, 5], 'multiplier': 1.35},
     'футбол_мимо': {'values': [1, 2],    'multiplier': 1.75},
+    # --- точные исходы (по одному на каждое из 5 значений эмодзи ⚽) ---
+    'футбол_штанга':    {'values': [1], 'multiplier': 5.0},
+    'футбол_мимоворот': {'values': [2], 'multiplier': 5.0},
+    'футбол_угол':      {'values': [3], 'multiplier': 5.0},
+    'футбол_центр':     {'values': [4], 'multiplier': 5.0},
+    'футбол_девятка':   {'values': [5], 'multiplier': 5.0},
+    # --- дубли (2 мяча подряд, как в кубах, но с более низкими множителями) ---
+    'футбол_любойдубль':      {'multiplier': 5.0,  'special': 'double_football_any_double'},
+    'футбол_конкретныйдубль': {'multiplier': 23.0, 'special': 'double_football_specific_double'},
 }
 
 DART_BET_TYPES = {
@@ -174,6 +183,9 @@ BET_TYPE_TO_CODE = {
     'куб3_любойтрипл': 't_trp', 'куб3_конкретныйтрипл': 't_strp', 'куб3_произведение': 't_prod',
     'баскет_гол': 'bk_g', 'баскет_мимо': 'bk_m', 'баскет_3очка': 'bk_3',
     'футбол_гол': 'fb_g', 'футбол_мимо': 'fb_m',
+    'футбол_штанга': 'fb_p', 'футбол_мимоворот': 'fb_w', 'футбол_угол': 'fb_a',
+    'футбол_центр': 'fb_c', 'футбол_девятка': 'fb_9',
+    'футбол_любойдубль': 'fb_d', 'футбол_конкретныйдубль': 'fb_sd',
     'дартс_белое': 'dt_w', 'дартс_красное': 'dt_r', 'дартс_мимо': 'dt_m', 'дартс_центр': 'dt_c',
     'боулинг_поражение': 'bw_l', 'боулинг_победа': 'bw_w', 'боулинг_страйк': 'bw_s',
 }
@@ -190,6 +202,8 @@ _OUTCOME_LABELS = {
     'куб3_любойтрипл': 'Любой трипл', 'куб3_произведение': 'Произведение ≥108',
     'баскет_гол': 'Гол', 'баскет_мимо': 'Мимо', 'баскет_3очка': '3-очковый',
     'футбол_гол': 'Гол', 'футбол_мимо': 'Мимо',
+    'футбол_штанга': 'Штанга', 'футбол_мимоворот': 'Мимо ворот', 'футбол_угол': 'Гол под углом',
+    'футбол_центр': 'Гол в центр', 'футбол_девятка': 'Девятка', 'футбол_любойдубль': 'Любой дубль',
     'дартс_белое': 'Белое', 'дартс_красное': 'Красное', 'дартс_мимо': 'Мимо', 'дартс_центр': 'Центр',
     'боулинг_поражение': 'Поражение', 'боулинг_победа': 'Победа', 'боулинг_страйк': 'Страйк',
 }
@@ -202,6 +216,9 @@ def _get_outcome_label(bet_type: str, bet_config: dict) -> str:
     if bet_type == 'куб3_конкретныйтрипл':
         t = bet_config.get('target', 0)
         return f'Трипл {t},{t},{t}'
+    if bet_type == 'футбол_конкретныйдубль':
+        t = bet_config.get('target', 0)
+        return f'Дубль {t},{t}'
     return _OUTCOME_LABELS.get(bet_type, _get_game_display_name(bet_type))
 
 
@@ -241,7 +258,7 @@ def _build_replay_keyboard(user_id: int, bet_type: str, amount: float, bet_confi
     code = BET_TYPE_TO_CODE.get(bet_type)
     if not code:
         return None
-    target = bet_config.get('target') if bet_type in ('куб2_конкретныйдубль', 'куб3_конкретныйтрипл') else None
+    target = bet_config.get('target') if bet_type in ('куб2_конкретныйдубль', 'куб3_конкретныйтрипл', 'футбол_конкретныйдубль') else None
     target_str = str(target) if target is not None else ''
 
     def _cb(amt: float) -> str:
@@ -666,6 +683,49 @@ async def play_double_dice_game(
     asyncio.create_task(_delayed_safe_reply(dice2, text, delay=3.0, reply_markup=keyboard))
 
 
+async def play_double_football_game(
+    chat_id: int,
+    user_id: int,
+    nickname: str,
+    amount: float,
+    bet_type: str,
+    bet_config: dict,
+    betting_game: BettingGame,
+    bet_msg: Message = None,
+):
+    send_kwargs = {'chat_id': chat_id, 'emoji': '⚽'}
+    if bet_msg:
+        send_kwargs['reply_to_message_id'] = bet_msg.message_id
+
+    ball1 = await betting_game.bot.send_dice(**send_kwargs)
+    await asyncio.sleep(2)
+
+    ball2_kwargs = {'chat_id': chat_id, 'emoji': '⚽'}
+    if bet_msg:
+        ball2_kwargs['reply_to_message_id'] = bet_msg.message_id
+    ball2 = await betting_game.bot.send_dice(**ball2_kwargs)
+
+    ball1_value = ball1.dice.value
+    ball2_value = ball2.dice.value
+    is_double = ball1_value == ball2_value
+
+    if bet_type == 'футбол_любойдубль':
+        is_win = is_double
+    elif bet_type == 'футбол_конкретныйдубль':
+        target = bet_config.get('target', 0)
+        is_win = is_double and ball1_value == target
+    else:
+        is_win = False
+
+    winnings = _apply_game_result(
+        user_id, nickname, amount, is_win, bet_config, betting_game, bet_type=bet_type
+    )
+
+    text = _build_win_text(nickname, winnings) if is_win else _build_lose_text(nickname)
+    keyboard = _build_replay_keyboard(user_id, bet_type, amount, bet_config)
+    asyncio.create_task(_delayed_safe_reply(ball2, text, delay=3.0, reply_markup=keyboard))
+
+
 async def play_triple_dice_game(
     chat_id: int,
     user_id: int,
@@ -822,6 +882,8 @@ async def _run_game(
         await play_triple_dice_game(chat_id, user_id, nickname, amount, bet_type, bet_config, betting_game, bet_msg)
     elif bet_type.startswith('куб2_'):
         await play_double_dice_game(chat_id, user_id, nickname, amount, bet_type, bet_config, betting_game, bet_msg)
+    elif bet_type in ('футбол_любойдубль', 'футбол_конкретныйдубль'):
+        await play_double_football_game(chat_id, user_id, nickname, amount, bet_type, bet_config, betting_game, bet_msg)
     elif bet_type.startswith('боулинг_') and bet_config.get('special') == 'bowling_vs':
         await play_bowling_vs_game(chat_id, user_id, nickname, amount, bet_type, bet_config, betting_game, bet_msg)
     else:
@@ -1163,6 +1225,7 @@ def _dice_tabs_row(active: str) -> list:
 
 def _dice_outcome_rows(active: str) -> list:
     if active == '1куб':
+        # Всё сразу плоским списком, без под-меню (как в 2 куба / 3 куба)
         return [
             [
                 InlineKeyboardButton(text="Нечет (x1.9)", callback_data="bet_dice_куб_нечет"),
@@ -1173,7 +1236,14 @@ def _dice_outcome_rows(active: str) -> list:
                 InlineKeyboardButton(text="Больше (x1.9)", callback_data="bet_dice_куб_бол")
             ],
             [
-                InlineKeyboardButton(text="Точное число (x5.7)", callback_data="bet_dice_exact")
+                InlineKeyboardButton(text="1 (x5.7)", callback_data="bet_dice_куб_1"),
+                InlineKeyboardButton(text="2 (x5.7)", callback_data="bet_dice_куб_2"),
+                InlineKeyboardButton(text="3 (x5.7)", callback_data="bet_dice_куб_3")
+            ],
+            [
+                InlineKeyboardButton(text="4 (x5.7)", callback_data="bet_dice_куб_4"),
+                InlineKeyboardButton(text="5 (x5.7)", callback_data="bet_dice_куб_5"),
+                InlineKeyboardButton(text="6 (x5.7)", callback_data="bet_dice_куб_6")
             ],
         ]
     elif active == '2куба':
@@ -1354,6 +1424,29 @@ async def show_football_menu(callback: CallbackQuery, betting_game: 'BettingGame
             InlineKeyboardButton(text="Мимо (x1.75)", callback_data="bet_football_футбол_мимо")
         ],
         [
+            InlineKeyboardButton(text="Штанга (x5)", callback_data="bet_football_футбол_штанга"),
+            InlineKeyboardButton(text="Мимо ворот (x5)", callback_data="bet_football_футбол_мимоворот")
+        ],
+        [
+            InlineKeyboardButton(text="Гол под углом (x5)", callback_data="bet_football_футбол_угол"),
+            InlineKeyboardButton(text="Гол в центр (x5)", callback_data="bet_football_футбол_центр")
+        ],
+        [
+            InlineKeyboardButton(text="Девятка (x5)", callback_data="bet_football_футбол_девятка")
+        ],
+        [
+            InlineKeyboardButton(text="1,1 (x23)", callback_data="bet_football_футбол_конкретныйдубль_1"),
+            InlineKeyboardButton(text="2,2 (x23)", callback_data="bet_football_футбол_конкретныйдубль_2"),
+            InlineKeyboardButton(text="3,3 (x23)", callback_data="bet_football_футбол_конкретныйдубль_3")
+        ],
+        [
+            InlineKeyboardButton(text="4,4 (x23)", callback_data="bet_football_футбол_конкретныйдубль_4"),
+            InlineKeyboardButton(text="5,5 (x23)", callback_data="bet_football_футбол_конкретныйдубль_5")
+        ],
+        [
+            InlineKeyboardButton(text="Любой дубль (x5)", callback_data="bet_football_футбол_любойдубль")
+        ],
+        [
             InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)
         ]
     ])
@@ -1432,6 +1525,12 @@ async def request_amount(callback: CallbackQuery, state: FSMContext, betting_gam
     elif data.startswith("bet_dice3_куб3_конкретныйтрипл_"):
         target = int(data.split("_")[-1])
         bet_type = "куб3_конкретныйтрипл"
+        bet_config = betting_game.get_bet_config(bet_type)
+        if bet_config:
+            bet_config['target'] = target
+    elif data.startswith("bet_football_футбол_конкретныйдубль_"):
+        target = int(data.split("_")[-1])
+        bet_type = "футбол_конкретныйдубль"
         bet_config = betting_game.get_bet_config(bet_type)
         if bet_config:
             bet_config['target'] = target
