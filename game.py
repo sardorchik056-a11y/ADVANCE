@@ -54,8 +54,6 @@ EMOJI_MORE       = "5449683594425410231"
 EMOJI_LESS       = "5447183459602669338"
 EMOJI_2MORE      = "5429651785352501917"
 EMOJI_2LESS      = "5429518319243775957"
-EMOJI_3MORE      = "5429651785352501917"
-EMOJI_3LESS      = "5429518319243775957"
 EMOJI_NUMBER     = "5456140674028019486"
 EMOJI_GOAL       = "5206607081334906820"
 EMOJI_3POINT     = "5397782960512444700"
@@ -85,19 +83,25 @@ DICE_BET_TYPES = {
 
 # --- ТИПЫ СТАВОК ДЛЯ 2 КУБОВ ---
 DICE_2_BET_TYPES = {
-    'куб2_обачет':   {'multiplier': 2.4, 'special': 'double_dice_parity'},
-    'куб2_обанечет': {'multiplier': 2.4, 'special': 'double_dice_parity'},
-    'куб2_обабольше': {'multiplier': 2.4, 'special': 'double_dice_both'},
-    'куб2_обаменьше': {'multiplier': 2.4, 'special': 'double_dice_both'},
-    'куб2_ровно7':   {'multiplier': 6.0, 'special': 'double_dice_exact'},
+    'куб2_сумма_ровно7':   {'multiplier': 6.0, 'special': 'double_dice_sum_exact'},
+    'куб2_сумма_больше7':  {'multiplier': 2.4, 'special': 'double_dice_sum'},
+    'куб2_сумма_меньше7':  {'multiplier': 2.4, 'special': 'double_dice_sum'},
+    'куб2_обачет':         {'multiplier': 2.4, 'special': 'double_dice_parity'},
+    'куб2_обанечет':       {'multiplier': 2.4, 'special': 'double_dice_parity'},
+    'куб2_любойдубль':     {'multiplier': 6.0, 'special': 'double_dice_any_double'},
+    'куб2_конкретныйдубль': {'multiplier': 36.0, 'special': 'double_dice_specific_double'},
+    'куб2_произведение':   {'multiplier': 4.0, 'special': 'double_dice_product'},
 }
 
 # --- ТИПЫ СТАВОК ДЛЯ 3 КУБОВ ---
 DICE_3_BET_TYPES = {
     'куб3_3чет':    {'multiplier': 8.0, 'special': 'triple_dice_parity'},
     'куб3_3нечет':  {'multiplier': 8.0, 'special': 'triple_dice_parity'},
-    'куб3_3больше': {'multiplier': 8.0, 'special': 'triple_dice_both'},
-    'куб3_3меньше': {'multiplier': 8.0, 'special': 'triple_dice_both'},
+    'куб3_больше10': {'multiplier': 2.4, 'special': 'triple_dice_sum'},
+    'куб3_меньше10': {'multiplier': 2.4, 'special': 'triple_dice_sum'},
+    'куб3_любойтрипл': {'multiplier': 36.0, 'special': 'triple_dice_any_triple'},
+    'куб3_конкретныйтрипл': {'multiplier': 216.0, 'special': 'triple_dice_specific_triple'},
+    'куб3_произведение': {'multiplier': 12.7, 'special': 'triple_dice_product'},
 }
 
 BASKETBALL_BET_TYPES = {
@@ -510,21 +514,29 @@ async def play_double_dice_game(
     dice1_value = dice1.dice.value
     dice2_value = dice2.dice.value
     total = dice1_value + dice2_value
+    product = dice1_value * dice2_value
     both_even = dice1_value % 2 == 0 and dice2_value % 2 == 0
     both_odd = dice1_value % 2 == 1 and dice2_value % 2 == 1
-    both_gt3 = dice1_value > 3 and dice2_value > 3
-    both_lt4 = dice1_value < 4 and dice2_value < 4
+    is_double = dice1_value == dice2_value
 
-    if bet_type == 'куб2_обачет':
+    if bet_type == 'куб2_сумма_ровно7':
+        is_win = total == 7
+    elif bet_type == 'куб2_сумма_больше7':
+        is_win = total > 7
+    elif bet_type == 'куб2_сумма_меньше7':
+        is_win = total < 7
+    elif bet_type == 'куб2_обачет':
         is_win = both_even
     elif bet_type == 'куб2_обанечет':
         is_win = both_odd
-    elif bet_type == 'куб2_обабольше':
-        is_win = both_gt3
-    elif bet_type == 'куб2_обаменьше':
-        is_win = both_lt4
-    elif bet_type == 'куб2_ровно7':
-        is_win = total == 7
+    elif bet_type == 'куб2_любойдубль':
+        is_win = is_double
+    elif bet_type == 'куб2_конкретныйдубль':
+        # значение передаётся в данных ставки
+        target = bet_config.get('target', 0)
+        is_win = is_double and dice1_value == target
+    elif bet_type == 'куб2_произведение':
+        is_win = product >= 18
     else:
         is_win = False
 
@@ -562,19 +574,26 @@ async def play_triple_dice_game(
     dice2_value = dice2.dice.value
     dice3_value = dice3.dice.value
     total = dice1_value + dice2_value + dice3_value
+    product = dice1_value * dice2_value * dice3_value
     all_even = dice1_value % 2 == 0 and dice2_value % 2 == 0 and dice3_value % 2 == 0
     all_odd = dice1_value % 2 == 1 and dice2_value % 2 == 1 and dice3_value % 2 == 1
-    all_gt3 = dice1_value > 3 and dice2_value > 3 and dice3_value > 3
-    all_lt4 = dice1_value < 4 and dice2_value < 4 and dice3_value < 4
+    is_triple = dice1_value == dice2_value == dice3_value
 
     if bet_type == 'куб3_3чет':
         is_win = all_even
     elif bet_type == 'куб3_3нечет':
         is_win = all_odd
-    elif bet_type == 'куб3_3больше':
-        is_win = all_gt3
-    elif bet_type == 'куб3_3меньше':
-        is_win = all_lt4
+    elif bet_type == 'куб3_больше10':
+        is_win = total > 10
+    elif bet_type == 'куб3_меньше10':
+        is_win = total < 10
+    elif bet_type == 'куб3_любойтрипл':
+        is_win = is_triple
+    elif bet_type == 'куб3_конкретныйтрипл':
+        target = bet_config.get('target', 0)
+        is_win = is_triple and dice1_value == target
+    elif bet_type == 'куб3_произведение':
+        is_win = product >= 108
     else:
         is_win = False
 
@@ -863,28 +882,17 @@ def _dice_outcome_rows(active: str) -> list:
         ]
     elif active == '2куба':
         return [
-            [
-                InlineKeyboardButton(text="Оба чёт (x2.4)", callback_data="bet_dice2_куб2_обачет"),
-                InlineKeyboardButton(text="Оба нечёт (x2.4)", callback_data="bet_dice2_куб2_обанечет")
-            ],
-            [
-                InlineKeyboardButton(text="Оба больше (x2.4)", callback_data="bet_dice2_куб2_обабольше"),
-                InlineKeyboardButton(text="Оба меньше (x2.4)", callback_data="bet_dice2_куб2_обаменьше")
-            ],
-            [
-                InlineKeyboardButton(text="Ровно 7 (x6.0)", callback_data="bet_dice2_куб2_ровно7")
-            ],
+            [InlineKeyboardButton(text="📊 Сумма", callback_data="dice2_sum")],
+            [InlineKeyboardButton(text="🔄 Чётность", callback_data="dice2_parity")],
+            [InlineKeyboardButton(text="🎯 Дубль", callback_data="dice2_double")],
+            [InlineKeyboardButton(text="✖️ Произведение ≥18 (x4.0)", callback_data="bet_dice2_куб2_произведение")],
         ]
     elif active == '3куба':
         return [
-            [
-                InlineKeyboardButton(text="3 чёт (x8.0)", callback_data="bet_dice3_куб3_3чет"),
-                InlineKeyboardButton(text="3 нечёт (x8.0)", callback_data="bet_dice3_куб3_3нечет")
-            ],
-            [
-                InlineKeyboardButton(text="3 больше (x8.0)", callback_data="bet_dice3_куб3_3больше"),
-                InlineKeyboardButton(text="3 меньше (x8.0)", callback_data="bet_dice3_куб3_3меньше")
-            ],
+            [InlineKeyboardButton(text="🔄 Чётность", callback_data="dice3_parity")],
+            [InlineKeyboardButton(text="📊 Сумма", callback_data="dice3_sum")],
+            [InlineKeyboardButton(text="🎯 Трипл", callback_data="dice3_triple")],
+            [InlineKeyboardButton(text="✖️ Произведение ≥108 (x12.7)", callback_data="bet_dice3_куб3_произведение")],
         ]
     return []
 
@@ -934,6 +942,131 @@ async def dice_tab_switch(callback: CallbackQuery, state: FSMContext):
     text = build_dice_hub_text(active, betting_game, user_id)
     markup = build_dice_hub_keyboard(active)
     await safe_edit_message(callback, text, reply_markup=markup, parse_mode='HTML')
+    await callback.answer()
+
+
+# --- МЕНЮ ДЛЯ 2 КУБОВ ---
+@router.callback_query(F.data == "dice2_sum")
+async def dice2_sum_menu(callback: CallbackQuery):
+    markup = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="Ровно 7 (x6.0)", callback_data="bet_dice2_куб2_сумма_ровно7"),
+        ],
+        [
+            InlineKeyboardButton(text="Больше 7 (x2.4)", callback_data="bet_dice2_куб2_сумма_больше7"),
+            InlineKeyboardButton(text="Меньше 7 (x2.4)", callback_data="bet_dice2_куб2_сумма_меньше7")
+        ],
+        [InlineKeyboardButton(text="Назад", callback_data="game_dice", icon_custom_emoji_id=EMOJI_BACK)]
+    ])
+    await safe_edit_message(callback,
+        f"<blockquote><b>🎲🎲 2 Куба — Сумма</b></blockquote>\n\n"
+        f"<blockquote><b><i>Выберите исход:</i></b></blockquote>",
+        reply_markup=markup, parse_mode='HTML'
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "dice2_parity")
+async def dice2_parity_menu(callback: CallbackQuery):
+    markup = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="Оба чёт (x2.4)", callback_data="bet_dice2_куб2_обачет"),
+            InlineKeyboardButton(text="Оба нечёт (x2.4)", callback_data="bet_dice2_куб2_обанечет")
+        ],
+        [InlineKeyboardButton(text="Назад", callback_data="game_dice", icon_custom_emoji_id=EMOJI_BACK)]
+    ])
+    await safe_edit_message(callback,
+        f"<blockquote><b>🎲🎲 2 Куба — Чётность</b></blockquote>\n\n"
+        f"<blockquote><b><i>Выберите исход:</i></b></blockquote>",
+        reply_markup=markup, parse_mode='HTML'
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "dice2_double")
+async def dice2_double_menu(callback: CallbackQuery):
+    markup = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="Любой дубль (x6.0)", callback_data="bet_dice2_куб2_любойдубль"),
+        ],
+        [
+            InlineKeyboardButton(text="1,1 (x36)", callback_data="bet_dice2_куб2_конкретныйдубль_1"),
+            InlineKeyboardButton(text="2,2 (x36)", callback_data="bet_dice2_куб2_конкретныйдубль_2"),
+            InlineKeyboardButton(text="3,3 (x36)", callback_data="bet_dice2_куб2_конкретныйдубль_3")
+        ],
+        [
+            InlineKeyboardButton(text="4,4 (x36)", callback_data="bet_dice2_куб2_конкретныйдубль_4"),
+            InlineKeyboardButton(text="5,5 (x36)", callback_data="bet_dice2_куб2_конкретныйдубль_5"),
+            InlineKeyboardButton(text="6,6 (x36)", callback_data="bet_dice2_куб2_конкретныйдубль_6")
+        ],
+        [InlineKeyboardButton(text="Назад", callback_data="game_dice", icon_custom_emoji_id=EMOJI_BACK)]
+    ])
+    await safe_edit_message(callback,
+        f"<blockquote><b>🎲🎲 2 Куба — Дубль</b></blockquote>\n\n"
+        f"<blockquote><b><i>Выберите исход:</i></b></blockquote>",
+        reply_markup=markup, parse_mode='HTML'
+    )
+    await callback.answer()
+
+
+# --- МЕНЮ ДЛЯ 3 КУБОВ ---
+@router.callback_query(F.data == "dice3_parity")
+async def dice3_parity_menu(callback: CallbackQuery):
+    markup = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="3 чёт (x8.0)", callback_data="bet_dice3_куб3_3чет"),
+            InlineKeyboardButton(text="3 нечёт (x8.0)", callback_data="bet_dice3_куб3_3нечет")
+        ],
+        [InlineKeyboardButton(text="Назад", callback_data="game_dice", icon_custom_emoji_id=EMOJI_BACK)]
+    ])
+    await safe_edit_message(callback,
+        f"<blockquote><b>🎲🎲🎲 3 Куба — Чётность</b></blockquote>\n\n"
+        f"<blockquote><b><i>Выберите исход:</i></b></blockquote>",
+        reply_markup=markup, parse_mode='HTML'
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "dice3_sum")
+async def dice3_sum_menu(callback: CallbackQuery):
+    markup = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="Больше 10 (x2.4)", callback_data="bet_dice3_куб3_больше10"),
+            InlineKeyboardButton(text="Меньше 10 (x2.4)", callback_data="bet_dice3_куб3_меньше10")
+        ],
+        [InlineKeyboardButton(text="Назад", callback_data="game_dice", icon_custom_emoji_id=EMOJI_BACK)]
+    ])
+    await safe_edit_message(callback,
+        f"<blockquote><b>🎲🎲🎲 3 Куба — Сумма</b></blockquote>\n\n"
+        f"<blockquote><b><i>Выберите исход:</i></b></blockquote>",
+        reply_markup=markup, parse_mode='HTML'
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "dice3_triple")
+async def dice3_triple_menu(callback: CallbackQuery):
+    markup = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="Любой трипл (x36.0)", callback_data="bet_dice3_куб3_любойтрипл"),
+        ],
+        [
+            InlineKeyboardButton(text="1,1,1 (x216)", callback_data="bet_dice3_куб3_конкретныйтрипл_1"),
+            InlineKeyboardButton(text="2,2,2 (x216)", callback_data="bet_dice3_куб3_конкретныйтрипл_2"),
+            InlineKeyboardButton(text="3,3,3 (x216)", callback_data="bet_dice3_куб3_конкретныйтрипл_3")
+        ],
+        [
+            InlineKeyboardButton(text="4,4,4 (x216)", callback_data="bet_dice3_куб3_конкретныйтрипл_4"),
+            InlineKeyboardButton(text="5,5,5 (x216)", callback_data="bet_dice3_куб3_конкретныйтрипл_5"),
+            InlineKeyboardButton(text="6,6,6 (x216)", callback_data="bet_dice3_куб3_конкретныйтрипл_6")
+        ],
+        [InlineKeyboardButton(text="Назад", callback_data="game_dice", icon_custom_emoji_id=EMOJI_BACK)]
+    ])
+    await safe_edit_message(callback,
+        f"<blockquote><b>🎲🎲🎲 3 Куба — Трипл</b></blockquote>\n\n"
+        f"<blockquote><b><i>Выберите исход:</i></b></blockquote>",
+        reply_markup=markup, parse_mode='HTML'
+    )
     await callback.answer()
 
 
@@ -1068,8 +1201,35 @@ async def show_bowling_menu(callback: CallbackQuery, betting_game: 'BettingGame'
 
 
 async def request_amount(callback: CallbackQuery, state: FSMContext, betting_game: BettingGame):
-    bet_type = callback.data.split('_', 2)[2]
-    user_id  = callback.from_user.id
+    # Определяем тип ставки из callback_data
+    data = callback.data
+    bet_type = None
+    
+    # Обработка конкретных дублей и триплов
+    if data.startswith("bet_dice2_куб2_конкретныйдубль_"):
+        target = int(data.split("_")[-1])
+        bet_type = "куб2_конкретныйдубль"
+        # Сохраняем целевое число в конфиге ставки
+        bet_config = betting_game.get_bet_config(bet_type)
+        if bet_config:
+            bet_config['target'] = target
+    elif data.startswith("bet_dice3_куб3_конкретныйтрипл_"):
+        target = int(data.split("_")[-1])
+        bet_type = "куб3_конкретныйтрипл"
+        bet_config = betting_game.get_bet_config(bet_type)
+        if bet_config:
+            bet_config['target'] = target
+    else:
+        # Обычные ставки
+        parts = data.split('_')
+        if len(parts) >= 3:
+            bet_type = '_'.join(parts[2:])
+    
+    if not bet_type:
+        await callback.answer("❌ Ошибка", show_alert=True)
+        return
+
+    user_id = callback.from_user.id
 
     allowed, wait_time = check_rate_limit(user_id)
     if not allowed:
