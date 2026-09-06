@@ -298,8 +298,8 @@ def links_line() -> str:
 def get_main_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="Профиль", callback_data="profile", icon_custom_emoji_id=EMOJI_PROFILE),
-            InlineKeyboardButton(text="Игры",    callback_data="games",   icon_custom_emoji_id=EMOJI_GAMES)
+            InlineKeyboardButton(text="Профиль",   callback_data="profile", icon_custom_emoji_id=EMOJI_PROFILE),
+            InlineKeyboardButton(text="О проекте", callback_data="about",   icon_custom_emoji_id=EMOJI_ABOUT)
         ],
         [
             InlineKeyboardButton(text="Лидеры",    callback_data="leaders",    icon_custom_emoji_id=EMOJI_LEADERS),
@@ -311,12 +311,12 @@ def get_main_menu():
     ])
 
 def get_reply_menu() -> ReplyKeyboardMarkup:
-    """Постоянная reply-клавиатура под полем ввода: Меню | Партнёры | О проекте."""
+    """Постоянная reply-клавиатура под полем ввода: Меню | Партнёры | Игры."""
     return ReplyKeyboardMarkup(
         keyboard=[[
-            KeyboardButton(text="Меню",      icon_custom_emoji_id=EMOJI_REPLY_MENU),
-            KeyboardButton(text="Партнёры",  icon_custom_emoji_id=EMOJI_REPLY_PARTNERS),
-            KeyboardButton(text="О проекте", icon_custom_emoji_id=EMOJI_REPLY_ABOUT),
+            KeyboardButton(text="Меню",     icon_custom_emoji_id=EMOJI_REPLY_MENU),
+            KeyboardButton(text="Партнёры", icon_custom_emoji_id=EMOJI_REPLY_PARTNERS),
+            KeyboardButton(text="Игры",     icon_custom_emoji_id=EMOJI_GAMES),
         ]],
         resize_keyboard=True,
         is_persistent=True
@@ -1136,7 +1136,9 @@ async def cmd_send_img_with_menu(message: Message):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Reply-кнопки: Меню | Партнёры | О проекте
+#  Reply-кнопки: Меню | Партнёры | Игры
+#  (нажатие "Игры" ловится ниже через GAMES_PATTERN-хендлер handle_games_command —
+#  текст кнопки "Игры" уже входит в этот паттерн, отдельный хендлер не нужен)
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.message(F.text == "Меню")
