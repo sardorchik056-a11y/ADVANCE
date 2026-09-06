@@ -1139,12 +1139,17 @@ async def _process_withdraw(message: Message, user_id: int, method: str):
         username   = message.from_user.username or ''
         first_name = message.from_user.first_name or ''
 
-        if method == 'xrocket':
-            result = await xrocket_api.transfer(user_id, amount, description="Вывод средств")
-            payout_ok = result is not None
-        else:
-            check = await crypto_api.create_check(amount, user_id)
-            payout_ok = bool(check and 'bot_check_url' in check)
+        check = None
+        try:
+            if method == 'xrocket':
+                result = await xrocket_api.transfer(user_id, amount, description="Вывод средств")
+                payout_ok = result is not None
+            else:
+                check = await crypto_api.create_check(amount, user_id)
+                payout_ok = bool(check and 'bot_check_url' in check)
+        except Exception as e:
+            logging.error(f"[Withdraw] Исключение при отправке выплаты user_id={user_id} amount={amount}: {e}")
+            payout_ok = False
 
         if not payout_ok:
             # откатываем списание, если выплата не прошла
