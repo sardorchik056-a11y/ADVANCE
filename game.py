@@ -722,13 +722,7 @@ def build_games_selector_keyboard() -> InlineKeyboardMarkup:
     if row:
         rows.append(row)
 
-    rows.append([
-        InlineKeyboardButton(text="💣 Мины",  callback_data="mines_menu"),
-        InlineKeyboardButton(text="🏰 Башня", callback_data="tower_menu"),
-    ])
-    rows.append([
-        InlineKeyboardButton(text="🪙 Золото", callback_data="gold_menu"),
-    ])
+    # Мины/Башня/Золото на главном экране пока скрыты — только эмодзи-игры.
     rows.append([
         InlineKeyboardButton(text="Назад", callback_data="back_to_main", icon_custom_emoji_id=EMOJI_BACK)
     ])
