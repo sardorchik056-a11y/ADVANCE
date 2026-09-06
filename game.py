@@ -11,6 +11,21 @@ from typing import Optional, Dict, Tuple
 # ========== СОЗДАЁМ РОУТЕР СРАЗУ ПОСЛЕ ИМПОРТОВ ==========
 router = Router()
 
+# Единственный актуальный экземпляр BettingGame. Регистрируется автоматически
+# в BettingGame.__init__, поэтому НЕ нужно делать `from main import betting_game`
+# (это создаёт отдельный, второй экземпляр модуля main при запуске `python main.py`,
+# в котором глобальная переменная betting_game так и останется None).
+_shared_betting_game = None
+
+
+def set_betting_game(bg):
+    global _shared_betting_game
+    _shared_betting_game = bg
+
+
+def get_betting_game():
+    return _shared_betting_game
+
 try:
     from database import save_game_result as db_save_game_result, update_balance as db_update_balance
 except ImportError:
@@ -309,6 +324,7 @@ class BettingGame:
         self.pending_bets = {}
         self.active_games = {}
         self.referral_system = None
+        set_betting_game(self)
 
     @property
     def _storage(self):
@@ -815,7 +831,10 @@ def _build_nickname(user) -> str:
 
 @router.callback_query(F.data.startswith("replay:"))
 async def handle_replay_bet(callback: CallbackQuery, state: FSMContext):
-    from main import betting_game
+    betting_game = get_betting_game()
+    if betting_game is None:
+        await callback.answer("❌ Бот перезапускается, попробуйте ещё раз чуть позже", show_alert=True)
+        return
 
     parts = (callback.data or "").split(":")
     if len(parts) < 5:
@@ -1178,7 +1197,7 @@ async def show_dice_menu(callback: CallbackQuery, betting_game: 'BettingGame' = 
 
 @router.callback_query(F.data.startswith("dtabs_"))
 async def dice_tab_switch(callback: CallbackQuery, state: FSMContext):
-    from main import betting_game
+    betting_game = get_betting_game()
     user_id = callback.from_user.id
     active = callback.data.split("_", 1)[1]
     if active not in DICE_TAB_ORDER:
