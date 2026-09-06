@@ -99,6 +99,8 @@ DICE_3_BET_TYPES = {
     'куб3_дуэль':       {'multiplier': 3.92, 'special': 'triple_dice_duel'},
     'куб3_стрит':       {'multiplier': 9.0, 'special': 'triple_dice_street'},
     'куб3_произведение': {'multiplier': 12.7, 'special': 'triple_dice_product'},
+    'куб3_возрастание': {'multiplier': 10.8, 'special': 'triple_dice_increasing'},
+    'куб3_убывание':    {'multiplier': 10.8, 'special': 'triple_dice_decreasing'},
 }
 
 BASKETBALL_BET_TYPES = {
@@ -589,6 +591,8 @@ async def play_triple_dice_game(
     all_gt3 = dice1_value > 3 and dice2_value > 3 and dice3_value > 3
     is_triple = dice1_value == dice2_value == dice3_value
     is_street = sorted([dice1_value, dice2_value, dice3_value]) in [[1,2,3], [2,3,4], [3,4,5], [4,5,6]]
+    is_increasing = dice1_value < dice2_value < dice3_value
+    is_decreasing = dice1_value > dice2_value > dice3_value
 
     if bet_type == 'куб3_3чет':
         is_win = all_even
@@ -599,8 +603,6 @@ async def play_triple_dice_game(
     elif bet_type == 'куб3_3больше':
         is_win = all_gt3
     elif bet_type == 'куб3_сумма':
-        # Сумма 3-18, нужно угадать точную сумму
-        # Пока просто проверяем сумму (позже сделаем выбор суммы)
         target = bet_config.get('target', 0)
         is_win = total == target
     elif bet_type == 'куб3_любойтрипл':
@@ -610,8 +612,6 @@ async def play_triple_dice_game(
         is_win = is_triple and dice1_value == target
     elif bet_type == 'куб3_дуэль':
         # Сравниваем с ботом
-        bot_total = 0
-        # Бот кидает 3 куба
         bot_dice1 = await betting_game.bot.send_dice(chat_id=chat_id, emoji='🎲')
         await asyncio.sleep(1)
         bot_dice2 = await betting_game.bot.send_dice(chat_id=chat_id, emoji='🎲')
@@ -623,6 +623,10 @@ async def play_triple_dice_game(
         is_win = is_street
     elif bet_type == 'куб3_произведение':
         is_win = product >= 108
+    elif bet_type == 'куб3_возрастание':
+        is_win = is_increasing
+    elif bet_type == 'куб3_убывание':
+        is_win = is_decreasing
     else:
         is_win = False
 
@@ -897,41 +901,69 @@ def _dice_tabs_row(active: str) -> list:
 def _dice_outcome_rows(active: str) -> list:
     if active == '1куб':
         return [
-            [InlineKeyboardButton(text="Нечет (x1.9)", callback_data="bet_dice_куб_нечет")],
-            [InlineKeyboardButton(text="Чет (x1.9)", callback_data="bet_dice_куб_чет")],
-            [InlineKeyboardButton(text="Меньше (x1.9)", callback_data="bet_dice_куб_мал")],
-            [InlineKeyboardButton(text="Больше (x1.9)", callback_data="bet_dice_куб_бол")],
+            [
+                InlineKeyboardButton(text="Нечет (x1.9)", callback_data="bet_dice_куб_нечет"),
+                InlineKeyboardButton(text="Чет (x1.9)", callback_data="bet_dice_куб_чет")
+            ],
+            [
+                InlineKeyboardButton(text="Меньше (x1.9)", callback_data="bet_dice_куб_мал"),
+                InlineKeyboardButton(text="Больше (x1.9)", callback_data="bet_dice_куб_бол")
+            ],
             [InlineKeyboardButton(text="Точное число (x5.7)", callback_data="bet_dice_exact")],
         ]
     elif active == '2куба':
         return [
-            [InlineKeyboardButton(text="Оба чёт (x2.4)", callback_data="bet_dice2_куб2_обачет")],
-            [InlineKeyboardButton(text="Оба нечёт (x2.4)", callback_data="bet_dice2_куб2_обанечет")],
-            [InlineKeyboardButton(text="Оба меньше (x2.4)", callback_data="bet_dice2_куб2_обаменьше")],
-            [InlineKeyboardButton(text="Оба больше (x2.4)", callback_data="bet_dice2_куб2_обабольше")],
-            [InlineKeyboardButton(text="Сумма >7 (x2.4)", callback_data="bet_dice2_куб2_сумма_больше7")],
-            [InlineKeyboardButton(text="Сумма <7 (x2.4)", callback_data="bet_dice2_куб2_сумма_меньше7")],
-            [InlineKeyboardButton(text="Сумма =7 (x6.0)", callback_data="bet_dice2_куб2_сумма_ровно7")],
-            [InlineKeyboardButton(text="Возрастание (x10.8)", callback_data="bet_dice2_куб2_возрастание")],
-            [InlineKeyboardButton(text="Убывание (x10.8)", callback_data="bet_dice2_куб2_убывание")],
-            [InlineKeyboardButton(text="Любой дубль (x6.0)", callback_data="bet_dice2_куб2_любойдубль")],
-            [InlineKeyboardButton(text="Конкретный дубль (x36)", callback_data="bet_dice2_double_specific")],
-            [InlineKeyboardButton(text="Произведение ≥18 (x4.0)", callback_data="bet_dice2_куб2_произведение")],
+            [
+                InlineKeyboardButton(text="Оба чёт (x2.4)", callback_data="bet_dice2_куб2_обачет"),
+                InlineKeyboardButton(text="Оба нечёт (x2.4)", callback_data="bet_dice2_куб2_обанечет")
+            ],
+            [
+                InlineKeyboardButton(text="Оба меньше (x2.4)", callback_data="bet_dice2_куб2_обаменьше"),
+                InlineKeyboardButton(text="Оба больше (x2.4)", callback_data="bet_dice2_куб2_обабольше")
+            ],
+            [
+                InlineKeyboardButton(text="Сумма >7 (x2.4)", callback_data="bet_dice2_куб2_сумма_больше7"),
+                InlineKeyboardButton(text="Сумма <7 (x2.4)", callback_data="bet_dice2_куб2_сумма_меньше7")
+            ],
+            [
+                InlineKeyboardButton(text="Сумма =7 (x6.0)", callback_data="bet_dice2_куб2_сумма_ровно7"),
+                InlineKeyboardButton(text="Любой дубль (x6.0)", callback_data="bet_dice2_куб2_любойдубль")
+            ],
+            [
+                InlineKeyboardButton(text="Возрастание (x10.8)", callback_data="bet_dice2_куб2_возрастание"),
+                InlineKeyboardButton(text="Убывание (x10.8)", callback_data="bet_dice2_куб2_убывание")
+            ],
+            [
+                InlineKeyboardButton(text="Конкретный дубль (x36)", callback_data="bet_dice2_double_specific"),
+                InlineKeyboardButton(text="Произведение ≥18 (x4.0)", callback_data="bet_dice2_куб2_произведение")
+            ],
         ]
     elif active == '3куба':
         return [
-            [InlineKeyboardButton(text="Три чёт (x8.0)", callback_data="bet_dice3_куб3_3чет")],
-            [InlineKeyboardButton(text="Три нечёт (x8.0)", callback_data="bet_dice3_куб3_3нечет")],
-            [InlineKeyboardButton(text="Три меньше (x8.0)", callback_data="bet_dice3_куб3_3меньше")],
-            [InlineKeyboardButton(text="Три больше (x8.0)", callback_data="bet_dice3_куб3_3больше")],
-            [InlineKeyboardButton(text="Убывание (x10.8)", callback_data="bet_dice3_куб3_убывание")],
-            [InlineKeyboardButton(text="Возрастание (x10.8)", callback_data="bet_dice3_куб3_возрастание")],
-            [InlineKeyboardButton(text="Конкретный трипл (x216)", callback_data="bet_dice3_triple_specific")],
-            [InlineKeyboardButton(text="Сумма (до x54)", callback_data="bet_dice3_sum")],
-            [InlineKeyboardButton(text="Любой трипл (x36)", callback_data="bet_dice3_куб3_любойтрипл")],
-            [InlineKeyboardButton(text="Дуэль (x3.92)", callback_data="bet_dice3_куб3_дуэль")],
-            [InlineKeyboardButton(text="Стрит (x9)", callback_data="bet_dice3_куб3_стрит")],
-            [InlineKeyboardButton(text="Произведение ≥108 (x12.7)", callback_data="bet_dice3_куб3_произведение")],
+            [
+                InlineKeyboardButton(text="Три чёт (x8.0)", callback_data="bet_dice3_куб3_3чет"),
+                InlineKeyboardButton(text="Три нечёт (x8.0)", callback_data="bet_dice3_куб3_3нечет")
+            ],
+            [
+                InlineKeyboardButton(text="Три меньше (x8.0)", callback_data="bet_dice3_куб3_3меньше"),
+                InlineKeyboardButton(text="Три больше (x8.0)", callback_data="bet_dice3_куб3_3больше")
+            ],
+            [
+                InlineKeyboardButton(text="Возрастание (x10.8)", callback_data="bet_dice3_куб3_возрастание"),
+                InlineKeyboardButton(text="Убывание (x10.8)", callback_data="bet_dice3_куб3_убывание")
+            ],
+            [
+                InlineKeyboardButton(text="Любой трипл (x36.0)", callback_data="bet_dice3_куб3_любойтрипл"),
+                InlineKeyboardButton(text="Конкретный трипл (x216)", callback_data="bet_dice3_triple_specific")
+            ],
+            [
+                InlineKeyboardButton(text="Сумма (до x54)", callback_data="bet_dice3_sum"),
+                InlineKeyboardButton(text="Дуэль (x3.92)", callback_data="bet_dice3_куб3_дуэль")
+            ],
+            [
+                InlineKeyboardButton(text="Стрит (x9.0)", callback_data="bet_dice3_куб3_стрит"),
+                InlineKeyboardButton(text="Произведение ≥108 (x12.7)", callback_data="bet_dice3_куб3_произведение")
+            ],
         ]
     return []
 
@@ -988,16 +1020,20 @@ async def dice_tab_switch(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "bet_dice2_double_specific")
 async def dice2_double_specific_menu(callback: CallbackQuery):
     markup = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="1-1 (x36)", callback_data="bet_dice2_куб2_конкретныйдубль_1")],
-        [InlineKeyboardButton(text="2-2 (x36)", callback_data="bet_dice2_куб2_конкретныйдубль_2")],
-        [InlineKeyboardButton(text="3-3 (x36)", callback_data="bet_dice2_куб2_конкретныйдубль_3")],
-        [InlineKeyboardButton(text="4-4 (x36)", callback_data="bet_dice2_куб2_конкретныйдубль_4")],
-        [InlineKeyboardButton(text="5-5 (x36)", callback_data="bet_dice2_куб2_конкретныйдубль_5")],
-        [InlineKeyboardButton(text="6-6 (x36)", callback_data="bet_dice2_куб2_конкретныйдубль_6")],
+        [
+            InlineKeyboardButton(text="1-1 (x36)", callback_data="bet_dice2_куб2_конкретныйдубль_1"),
+            InlineKeyboardButton(text="2-2 (x36)", callback_data="bet_dice2_куб2_конкретныйдубль_2"),
+            InlineKeyboardButton(text="3-3 (x36)", callback_data="bet_dice2_куб2_конкретныйдубль_3")
+        ],
+        [
+            InlineKeyboardButton(text="4-4 (x36)", callback_data="bet_dice2_куб2_конкретныйдубль_4"),
+            InlineKeyboardButton(text="5-5 (x36)", callback_data="bet_dice2_куб2_конкретныйдубль_5"),
+            InlineKeyboardButton(text="6-6 (x36)", callback_data="bet_dice2_куб2_конкретныйдубль_6")
+        ],
         [InlineKeyboardButton(text="Назад", callback_data="game_dice", icon_custom_emoji_id=EMOJI_BACK)]
     ])
     await safe_edit_message(callback,
-        f"<blockquote><b>🎲🎲 2 Куба — Конкретный дубль</b></blockquote>\n\n"
+        f"<blockquote><b>Конкретный дубль</b></blockquote>\n\n"
         f"<blockquote><b><i>Выберите число:</i></b></blockquote>",
         reply_markup=markup, parse_mode='HTML'
     )
@@ -1007,16 +1043,20 @@ async def dice2_double_specific_menu(callback: CallbackQuery):
 @router.callback_query(F.data == "bet_dice3_triple_specific")
 async def dice3_triple_specific_menu(callback: CallbackQuery):
     markup = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="1-1-1 (x216)", callback_data="bet_dice3_куб3_конкретныйтрипл_1")],
-        [InlineKeyboardButton(text="2-2-2 (x216)", callback_data="bet_dice3_куб3_конкретныйтрипл_2")],
-        [InlineKeyboardButton(text="3-3-3 (x216)", callback_data="bet_dice3_куб3_конкретныйтрипл_3")],
-        [InlineKeyboardButton(text="4-4-4 (x216)", callback_data="bet_dice3_куб3_конкретныйтрипл_4")],
-        [InlineKeyboardButton(text="5-5-5 (x216)", callback_data="bet_dice3_куб3_конкретныйтрипл_5")],
-        [InlineKeyboardButton(text="6-6-6 (x216)", callback_data="bet_dice3_куб3_конкретныйтрипл_6")],
+        [
+            InlineKeyboardButton(text="1-1-1 (x216)", callback_data="bet_dice3_куб3_конкретныйтрипл_1"),
+            InlineKeyboardButton(text="2-2-2 (x216)", callback_data="bet_dice3_куб3_конкретныйтрипл_2"),
+            InlineKeyboardButton(text="3-3-3 (x216)", callback_data="bet_dice3_куб3_конкретныйтрипл_3")
+        ],
+        [
+            InlineKeyboardButton(text="4-4-4 (x216)", callback_data="bet_dice3_куб3_конкретныйтрипл_4"),
+            InlineKeyboardButton(text="5-5-5 (x216)", callback_data="bet_dice3_куб3_конкретныйтрипл_5"),
+            InlineKeyboardButton(text="6-6-6 (x216)", callback_data="bet_dice3_куб3_конкретныйтрипл_6")
+        ],
         [InlineKeyboardButton(text="Назад", callback_data="game_dice", icon_custom_emoji_id=EMOJI_BACK)]
     ])
     await safe_edit_message(callback,
-        f"<blockquote><b>🎲🎲🎲 3 Куба — Конкретный трипл</b></blockquote>\n\n"
+        f"<blockquote><b>Конкретный трипл</b></blockquote>\n\n"
         f"<blockquote><b><i>Выберите число:</i></b></blockquote>",
         reply_markup=markup, parse_mode='HTML'
     )
@@ -1025,11 +1065,10 @@ async def dice3_triple_specific_menu(callback: CallbackQuery):
 
 @router.callback_query(F.data == "bet_dice3_sum")
 async def dice3_sum_menu(callback: CallbackQuery):
-    # Создаём кнопки для суммы от 3 до 18
     buttons = []
     row = []
     for i in range(3, 19):
-        multiplier = 54.0  # Максимальный множитель для точной суммы
+        multiplier = 54.0
         row.append(InlineKeyboardButton(text=f"{i} (x{multiplier:.0f})", callback_data=f"bet_dice3_сумма_{i}"))
         if len(row) == 4:
             buttons.append(row)
@@ -1040,7 +1079,7 @@ async def dice3_sum_menu(callback: CallbackQuery):
     
     markup = InlineKeyboardMarkup(inline_keyboard=buttons)
     await safe_edit_message(callback,
-        f"<blockquote><b>🎲🎲🎲 3 Куба — Сумма</b></blockquote>\n\n"
+        f"<blockquote><b>Сумма</b></blockquote>\n\n"
         f"<blockquote><b><i>Выберите сумму (3-18):</i></b></blockquote>\n\n"
         f"<blockquote><i>Множитель зависит от вероятности выпадения</i></blockquote>",
         reply_markup=markup, parse_mode='HTML'
@@ -1060,12 +1099,16 @@ def _tabs_row(active: str) -> list:
 
 async def show_exact_number_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
     markup = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="1 (x5.7)", callback_data="bet_dice_куб_1")],
-        [InlineKeyboardButton(text="2 (x5.7)", callback_data="bet_dice_куб_2")],
-        [InlineKeyboardButton(text="3 (x5.7)", callback_data="bet_dice_куб_3")],
-        [InlineKeyboardButton(text="4 (x5.7)", callback_data="bet_dice_куб_4")],
-        [InlineKeyboardButton(text="5 (x5.7)", callback_data="bet_dice_куб_5")],
-        [InlineKeyboardButton(text="6 (x5.7)", callback_data="bet_dice_куб_6")],
+        [
+            InlineKeyboardButton(text="1 (x5.7)", callback_data="bet_dice_куб_1"),
+            InlineKeyboardButton(text="2 (x5.7)", callback_data="bet_dice_куб_2"),
+            InlineKeyboardButton(text="3 (x5.7)", callback_data="bet_dice_куб_3")
+        ],
+        [
+            InlineKeyboardButton(text="4 (x5.7)", callback_data="bet_dice_куб_4"),
+            InlineKeyboardButton(text="5 (x5.7)", callback_data="bet_dice_куб_5"),
+            InlineKeyboardButton(text="6 (x5.7)", callback_data="bet_dice_куб_6")
+        ],
         [InlineKeyboardButton(text="Назад", callback_data="game_dice", icon_custom_emoji_id=EMOJI_BACK)]
     ])
     header = _bet_balance_block(betting_game, callback.from_user.id) if betting_game else ""
@@ -1082,8 +1125,10 @@ async def show_basketball_menu(callback: CallbackQuery, betting_game: 'BettingGa
     markup = InlineKeyboardMarkup(inline_keyboard=[
         _tabs_row('basketball'),
         [InlineKeyboardButton(text="3-очковый (x5.7)", callback_data="bet_basketball_баскет_3очка")],
-        [InlineKeyboardButton(text="Гол (x1.85)", callback_data="bet_basketball_баскет_гол")],
-        [InlineKeyboardButton(text="Мимо (x1.7)", callback_data="bet_basketball_баскет_мимо")],
+        [
+            InlineKeyboardButton(text="Гол (x1.85)", callback_data="bet_basketball_баскет_гол"),
+            InlineKeyboardButton(text="Мимо (x1.7)", callback_data="bet_basketball_баскет_мимо")
+        ],
         [InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)]
     ])
     header = _bet_balance_block(betting_game, callback.from_user.id) if betting_game else ""
@@ -1099,8 +1144,10 @@ async def show_basketball_menu(callback: CallbackQuery, betting_game: 'BettingGa
 async def show_football_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
     markup = InlineKeyboardMarkup(inline_keyboard=[
         _tabs_row('football'),
-        [InlineKeyboardButton(text="Гол (x1.35)", callback_data="bet_football_футбол_гол")],
-        [InlineKeyboardButton(text="Мимо (x1.75)", callback_data="bet_football_футбол_мимо")],
+        [
+            InlineKeyboardButton(text="Гол (x1.35)", callback_data="bet_football_футбол_гол"),
+            InlineKeyboardButton(text="Мимо (x1.75)", callback_data="bet_football_футбол_мимо")
+        ],
         [InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)]
     ])
     header = _bet_balance_block(betting_game, callback.from_user.id) if betting_game else ""
@@ -1116,10 +1163,14 @@ async def show_football_menu(callback: CallbackQuery, betting_game: 'BettingGame
 async def show_darts_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
     markup = InlineKeyboardMarkup(inline_keyboard=[
         _tabs_row('darts'),
-        [InlineKeyboardButton(text="Белое (x2.35)", callback_data="bet_darts_дартс_белое")],
-        [InlineKeyboardButton(text="Красное (x1.9)", callback_data="bet_darts_дартс_красное")],
-        [InlineKeyboardButton(text="Центр (x5.7)", callback_data="bet_darts_дартс_центр")],
-        [InlineKeyboardButton(text="Мимо (x5.7)", callback_data="bet_darts_дартс_мимо")],
+        [
+            InlineKeyboardButton(text="Белое (x2.35)", callback_data="bet_darts_дартс_белое"),
+            InlineKeyboardButton(text="Красное (x1.9)", callback_data="bet_darts_дартс_красное")
+        ],
+        [
+            InlineKeyboardButton(text="Центр (x5.7)", callback_data="bet_darts_дартс_центр"),
+            InlineKeyboardButton(text="Мимо (x5.7)", callback_data="bet_darts_дартс_мимо")
+        ],
         [InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)]
     ])
     header = _bet_balance_block(betting_game, callback.from_user.id) if betting_game else ""
@@ -1135,8 +1186,10 @@ async def show_darts_menu(callback: CallbackQuery, betting_game: 'BettingGame' =
 async def show_bowling_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
     markup = InlineKeyboardMarkup(inline_keyboard=[
         _tabs_row('bowling'),
-        [InlineKeyboardButton(text="Победа (x1.8)", callback_data="bet_bowling_боулинг_победа")],
-        [InlineKeyboardButton(text="Поражение (x1.8)", callback_data="bet_bowling_боулинг_поражение")],
+        [
+            InlineKeyboardButton(text="Победа (x1.8)", callback_data="bet_bowling_боулинг_победа"),
+            InlineKeyboardButton(text="Поражение (x1.8)", callback_data="bet_bowling_боулинг_поражение")
+        ],
         [InlineKeyboardButton(text="Страйк (x5.7)", callback_data="bet_bowling_боулинг_страйк")],
         [InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)]
     ])
@@ -1155,20 +1208,16 @@ async def request_amount(callback: CallbackQuery, state: FSMContext, betting_gam
     bet_type = None
     target = None
     
-    # Обработка конкретных дублей
     if data.startswith("bet_dice2_куб2_конкретныйдубль_"):
         target = int(data.split("_")[-1])
         bet_type = "куб2_конкретныйдубль"
-    # Обработка конкретных триплов
     elif data.startswith("bet_dice3_куб3_конкретныйтрипл_"):
         target = int(data.split("_")[-1])
         bet_type = "куб3_конкретныйтрипл"
-    # Обработка суммы для 3 кубов
     elif data.startswith("bet_dice3_сумма_"):
         target = int(data.split("_")[-1])
         bet_type = "куб3_сумма"
     else:
-        # Обычные ставки
         parts = data.split('_')
         if len(parts) >= 3:
             bet_type = '_'.join(parts[2:])
@@ -1193,7 +1242,6 @@ async def request_amount(callback: CallbackQuery, state: FSMContext, betting_gam
         await callback.answer("❌ Ошибка", show_alert=True)
         return
     
-    # Сохраняем target в конфиг
     if target is not None:
         bet_config['target'] = target
 
