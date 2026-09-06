@@ -881,7 +881,7 @@ async def game_menu_callback(callback: CallbackQuery, state: FSMContext):
         'bowling':    show_bowling_menu,
     }.get(key)
     if handler:
-        await handler(callback)
+        await handler(callback, betting_game)
     else:
         await callback.answer("❌ Ошибка", show_alert=True)
 
@@ -935,7 +935,7 @@ async def games_tab_switch(callback: CallbackQuery, state: FSMContext):
         'bowling':    show_bowling_menu,
     }.get(active)
     if handler:
-        await handler(callback)
+        await handler(callback, betting_game)
     else:
         await callback.answer("❌ Ошибка", show_alert=True)
 
@@ -944,7 +944,7 @@ async def exact_number_menu(callback: CallbackQuery, state: FSMContext):
     _save_username(callback.from_user.id, callback.from_user.username or "", callback.from_user.first_name or "")
     if not _is_msg_owner(callback.message.message_id, callback.from_user.id):
         await callback.answer("🚫 Это не ваша кнопка!", show_alert=True); return
-    await state.clear(); await show_exact_number_menu(callback)
+    await state.clear(); await show_exact_number_menu(callback, betting_game)
 
 @router.callback_query(F.data.startswith("bet_"))
 async def handle_bet_selection(callback: CallbackQuery, state: FSMContext):
