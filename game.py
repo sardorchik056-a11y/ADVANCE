@@ -722,9 +722,12 @@ def build_games_selector_keyboard() -> InlineKeyboardMarkup:
     if row:
         rows.append(row)
 
-    # Мины/Башня/Золото на главном экране пока скрыты — только эмодзи-игры.
     rows.append([
-        InlineKeyboardButton(text="Назад", callback_data="back_to_main", icon_custom_emoji_id=EMOJI_BACK)
+        InlineKeyboardButton(text="💣 Мины",  callback_data="mines_menu"),
+        InlineKeyboardButton(text="🏰 Башня", callback_data="tower_menu"),
+    ])
+    rows.append([
+        InlineKeyboardButton(text="🪙 Золото", callback_data="gold_menu"),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -860,6 +863,7 @@ async def show_games_hub(callback: CallbackQuery, active: str = 'dice'):
 
 async def show_dice_menu(callback: CallbackQuery):
     markup = InlineKeyboardMarkup(inline_keyboard=[
+        _tabs_row('dice'),
         [
             InlineKeyboardButton(text="Нечет (x1.9)", callback_data="bet_dice_куб_нечет", icon_custom_emoji_id=EMOJI_NECHET),
             InlineKeyboardButton(text="Чет (x1.9)",   callback_data="bet_dice_куб_чет",   icon_custom_emoji_id=EMOJI_CHET)
@@ -913,6 +917,7 @@ async def show_exact_number_menu(callback: CallbackQuery):
 
 async def show_basketball_menu(callback: CallbackQuery):
     markup = InlineKeyboardMarkup(inline_keyboard=[
+        _tabs_row('basketball'),
         [
             InlineKeyboardButton(text="3-очковый (x5.7)", callback_data="bet_basketball_баскет_3очка", icon_custom_emoji_id=EMOJI_3POINT)
         ],
@@ -934,6 +939,7 @@ async def show_basketball_menu(callback: CallbackQuery):
 
 async def show_football_menu(callback: CallbackQuery):
     markup = InlineKeyboardMarkup(inline_keyboard=[
+        _tabs_row('football'),
         [
             InlineKeyboardButton(text="Гол (x1.35)",  callback_data="bet_football_футбол_гол",  icon_custom_emoji_id=EMOJI_GOAL),
             InlineKeyboardButton(text="Мимо (x1.75)", callback_data="bet_football_футбол_мимо", icon_custom_emoji_id=EMOJI_MISS)
@@ -952,6 +958,7 @@ async def show_football_menu(callback: CallbackQuery):
 
 async def show_darts_menu(callback: CallbackQuery):
     markup = InlineKeyboardMarkup(inline_keyboard=[
+        _tabs_row('darts'),
         [
             InlineKeyboardButton(text="⚪Белое (x2.35)",  callback_data="bet_darts_дартс_белое"),
             InlineKeyboardButton(text="🔴Красное (x1.9)", callback_data="bet_darts_дартс_красное")
@@ -976,6 +983,7 @@ async def show_darts_menu(callback: CallbackQuery):
 
 async def show_bowling_menu(callback: CallbackQuery):
     markup = InlineKeyboardMarkup(inline_keyboard=[
+        _tabs_row('bowling'),
         [
             InlineKeyboardButton(text="Победа (x1.8)",    callback_data="bet_bowling_боулинг_победа",    icon_custom_emoji_id=EMOJI_GOAL),
             InlineKeyboardButton(text="Поражение (x1.8)", callback_data="bet_bowling_боулинг_поражение", icon_custom_emoji_id=EMOJI_MISS)
