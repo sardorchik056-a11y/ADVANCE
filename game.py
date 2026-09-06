@@ -131,10 +131,10 @@ FOOTBALL_BET_TYPES = {
     'футбол_гол':  {'values': [3, 4, 5], 'multiplier': 1.35},
     'футбол_мимо': {'values': [1, 2],    'multiplier': 1.75},
     # --- точные исходы (по одному на каждое из 5 значений эмодзи ⚽) ---
-    'футбол_штанга':    {'values': [1], 'multiplier': 5.0},
-    'футбол_мимоворот': {'values': [2], 'multiplier': 5.0},
-    'футбол_угол':      {'values': [3], 'multiplier': 5.0},
-    'футбол_центр':     {'values': [4], 'multiplier': 5.0},
+    'футбол_штанга':    {'values': [2], 'multiplier': 5.0},
+    'футбол_мимоворот': {'values': [1], 'multiplier': 5.0},
+    'футбол_угол':      {'values': [4], 'multiplier': 5.0},
+    'футбол_центр':     {'values': [3], 'multiplier': 5.0},
     'футбол_девятка':   {'values': [5], 'multiplier': 5.0},
     # --- дубли (2 мяча подряд, как в кубах, но с более низкими множителями) ---
     'футбол_любойдубль':      {'multiplier': 5.0,  'special': 'double_football_any_double'},
@@ -208,11 +208,23 @@ _OUTCOME_LABELS = {
     'боулинг_поражение': 'Поражение', 'боулинг_победа': 'Победа', 'боулинг_страйк': 'Страйк',
 }
 
+# --- Автоматически строим "число -> название" для футбола из FOOTBALL_BET_TYPES,
+#     чтобы кнопки дублей и текст ставки всегда были в одном месте синхронизированы. ---
+_FOOTBALL_DOUBLE_TARGET_NAME: Dict[int, str] = {}
+for _fb_bt, _fb_cfg in FOOTBALL_BET_TYPES.items():
+    _fb_vals = _fb_cfg.get('values')
+    if _fb_vals and len(_fb_vals) == 1:
+        _FOOTBALL_DOUBLE_TARGET_NAME[_fb_vals[0]] = _OUTCOME_LABELS.get(_fb_bt, _fb_bt)
+
 
 def _get_outcome_label(bet_type: str, bet_config: dict) -> str:
     if bet_type == 'куб2_конкретныйдубль':
         t = bet_config.get('target', 0)
         return f'Дубль {t},{t}'
+    if bet_type == 'футбол_конкретныйдубль':
+        t = bet_config.get('target', 0)
+        name = _FOOTBALL_DOUBLE_TARGET_NAME.get(t, str(t))
+        return f'Дубль «{name}»'
     if bet_type == 'куб3_конкретныйтрипл':
         t = bet_config.get('target', 0)
         return f'Трипл {t},{t},{t}'
@@ -1435,13 +1447,13 @@ async def show_football_menu(callback: CallbackQuery, betting_game: 'BettingGame
             InlineKeyboardButton(text="Девятка (x5)", callback_data="bet_football_футбол_девятка")
         ],
         [
-            InlineKeyboardButton(text="1,1 (x23)", callback_data="bet_football_футбол_конкретныйдубль_1"),
-            InlineKeyboardButton(text="2,2 (x23)", callback_data="bet_football_футбол_конкретныйдубль_2"),
-            InlineKeyboardButton(text="3,3 (x23)", callback_data="bet_football_футбол_конкретныйдубль_3")
+            InlineKeyboardButton(text=f"2× {_FOOTBALL_DOUBLE_TARGET_NAME.get(1, '1')} (x23)", callback_data="bet_football_футбол_конкретныйдубль_1"),
+            InlineKeyboardButton(text=f"2× {_FOOTBALL_DOUBLE_TARGET_NAME.get(2, '2')} (x23)", callback_data="bet_football_футбол_конкретныйдубль_2"),
+            InlineKeyboardButton(text=f"2× {_FOOTBALL_DOUBLE_TARGET_NAME.get(3, '3')} (x23)", callback_data="bet_football_футбол_конкретныйдубль_3")
         ],
         [
-            InlineKeyboardButton(text="4,4 (x23)", callback_data="bet_football_футбол_конкретныйдубль_4"),
-            InlineKeyboardButton(text="5,5 (x23)", callback_data="bet_football_футбол_конкретныйдубль_5")
+            InlineKeyboardButton(text=f"2× {_FOOTBALL_DOUBLE_TARGET_NAME.get(4, '4')} (x23)", callback_data="bet_football_футбол_конкретныйдубль_4"),
+            InlineKeyboardButton(text=f"2× {_FOOTBALL_DOUBLE_TARGET_NAME.get(5, '5')} (x23)", callback_data="bet_football_футбол_конкретныйдубль_5")
         ],
         [
             InlineKeyboardButton(text="Любой дубль (x5)", callback_data="bet_football_футбол_любойдубль")
