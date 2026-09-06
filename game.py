@@ -613,6 +613,138 @@ async def safe_edit_message(callback: CallbackQuery, text: str, reply_markup=Non
             pass
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+#  Единый hub игр: ряд эмодзи-иконок (без подписей) сверху = табы,
+#  под ними — исходы активной игры. Переключение табов правит то же сообщение
+#  (по аналогии с табами в leaders.py), без "Назад" между разделами.
+# ─────────────────────────────────────────────────────────────────────────────
+
+GAME_TAB_ORDER = ['dice', 'football', 'basketball', 'darts', 'bowling']
+
+GAME_TAB_EMOJI = {
+    'dice':       '🎲',
+    'football':   '⚽',
+    'basketball': '🏀',
+    'darts':      '🎯',
+    'bowling':    '🎳',
+}
+
+GAME_TAB_TITLE = {
+    'dice':       'Кубик',
+    'football':   'Футбол',
+    'basketball': 'Баскетбол',
+    'darts':      'Дартс',
+    'bowling':    'Боулинг',
+}
+
+
+def _tabs_row(active: str) -> list:
+    row = []
+    for key in GAME_TAB_ORDER:
+        emoji = GAME_TAB_EMOJI[key]
+        text = f"· {emoji} ·" if key == active else emoji
+        row.append(InlineKeyboardButton(text=text, callback_data=f"gtab_{key}"))
+    return row
+
+
+def _outcome_rows(active: str) -> list:
+    if active == 'dice':
+        return [
+            [
+                InlineKeyboardButton(text="Нечет (x1.9)", callback_data="bet_dice_куб_нечет", icon_custom_emoji_id=EMOJI_NECHET),
+                InlineKeyboardButton(text="Чет (x1.9)",   callback_data="bet_dice_куб_чет",   icon_custom_emoji_id=EMOJI_CHET)
+            ],
+            [
+                InlineKeyboardButton(text="Меньше (x1.9)", callback_data="bet_dice_куб_мал", icon_custom_emoji_id=EMOJI_LESS),
+                InlineKeyboardButton(text="Больше (x1.9)", callback_data="bet_dice_куб_бол", icon_custom_emoji_id=EMOJI_MORE)
+            ],
+            [
+                InlineKeyboardButton(text="2-меньше (x3.8)", callback_data="bet_dice_куб_2меньше", icon_custom_emoji_id=EMOJI_2LESS),
+                InlineKeyboardButton(text="2-больше (x3.8)", callback_data="bet_dice_куб_2больше", icon_custom_emoji_id=EMOJI_2MORE)
+            ],
+            [
+                InlineKeyboardButton(text="Точное число (x5.7)", callback_data="bet_dice_exact", icon_custom_emoji_id=EMOJI_NUMBER)
+            ],
+        ]
+    if active == 'basketball':
+        return [
+            [
+                InlineKeyboardButton(text="3-очковый (x5.7)", callback_data="bet_basketball_баскет_3очка", icon_custom_emoji_id=EMOJI_3POINT)
+            ],
+            [
+                InlineKeyboardButton(text="Гол (x1.85)", callback_data="bet_basketball_баскет_гол",  icon_custom_emoji_id=EMOJI_GOAL),
+                InlineKeyboardButton(text="Мимо (x1.7)", callback_data="bet_basketball_баскет_мимо", icon_custom_emoji_id=EMOJI_MISS)
+            ],
+        ]
+    if active == 'football':
+        return [
+            [
+                InlineKeyboardButton(text="Гол (x1.35)",  callback_data="bet_football_футбол_гол",  icon_custom_emoji_id=EMOJI_GOAL),
+                InlineKeyboardButton(text="Мимо (x1.75)", callback_data="bet_football_футбол_мимо", icon_custom_emoji_id=EMOJI_MISS)
+            ],
+        ]
+    if active == 'darts':
+        return [
+            [
+                InlineKeyboardButton(text="⚪Белое (x2.35)",  callback_data="bet_darts_дартс_белое"),
+                InlineKeyboardButton(text="🔴Красное (x1.9)", callback_data="bet_darts_дартс_красное")
+            ],
+            [
+                InlineKeyboardButton(text="Центр (x5.7)", callback_data="bet_darts_дартс_центр", icon_custom_emoji_id=EMOJI_3POINT)
+            ],
+            [
+                InlineKeyboardButton(text="Мимо (x5.7)", callback_data="bet_darts_дартс_мимо", icon_custom_emoji_id=EMOJI_MISS)
+            ],
+        ]
+    if active == 'bowling':
+        return [
+            [
+                InlineKeyboardButton(text="Победа (x1.8)",    callback_data="bet_bowling_боулинг_победа",    icon_custom_emoji_id=EMOJI_GOAL),
+                InlineKeyboardButton(text="Поражение (x1.8)", callback_data="bet_bowling_боулинг_поражение", icon_custom_emoji_id=EMOJI_MISS)
+            ],
+            [
+                InlineKeyboardButton(text="Страйк (x5.7)", callback_data="bet_bowling_боулинг_страйк", icon_custom_emoji_id=EMOJI_3POINT)
+            ],
+        ]
+    return []
+
+
+def build_games_hub_keyboard(active: str, extra_back_callback: str = "back_to_main") -> InlineKeyboardMarkup:
+    if active not in GAME_TAB_ORDER:
+        active = 'dice'
+    rows = [_tabs_row(active)]
+    rows.extend(_outcome_rows(active))
+    rows.append([
+        InlineKeyboardButton(text="💣 Мины",  callback_data="mines_menu"),
+        InlineKeyboardButton(text="🏰 Башня", callback_data="tower_menu"),
+    ])
+    rows.append([
+        InlineKeyboardButton(text="🪙 Золото", callback_data="gold_menu"),
+    ])
+    rows.append([
+        InlineKeyboardButton(text="Назад", callback_data=extra_back_callback, icon_custom_emoji_id=EMOJI_BACK)
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def build_games_hub_text(active: str) -> str:
+    if active not in GAME_TAB_ORDER:
+        active = 'dice'
+    emoji = GAME_TAB_EMOJI[active]
+    title = GAME_TAB_TITLE[active]
+    return (
+        f"<blockquote><b>{emoji} {title}</b></blockquote>\n\n"
+        f"<blockquote><b><i>Выберите исход:</i></b></blockquote>\n\n"
+    )
+
+
+async def show_games_hub(callback: CallbackQuery, active: str = 'dice'):
+    text = build_games_hub_text(active)
+    markup = build_games_hub_keyboard(active)
+    await safe_edit_message(callback, text, reply_markup=markup, parse_mode='HTML')
+    await callback.answer()
+
+
 async def show_dice_menu(callback: CallbackQuery):
     markup = InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -655,7 +787,7 @@ async def show_exact_number_menu(callback: CallbackQuery):
             InlineKeyboardButton(text="(x5.7)", callback_data="bet_dice_куб_6", icon_custom_emoji_id="5390966190283694453")
         ],
         [
-            InlineKeyboardButton(text="Назад", callback_data="custom_dice_001", icon_custom_emoji_id=EMOJI_BACK)
+            InlineKeyboardButton(text="Назад", callback_data="gtab_dice", icon_custom_emoji_id=EMOJI_BACK)
         ]
     ])
     await safe_edit_message(callback,
