@@ -23,7 +23,9 @@ from game import (
     BettingGame, show_dice_menu, show_basketball_menu, show_football_menu,
     show_darts_menu, show_bowling_menu, show_exact_number_menu, request_amount,
     show_games_hub, build_games_hub_text, build_games_hub_keyboard,
-    cancel_bet, is_bet_command, handle_text_bet_command
+    show_games_selector,
+    cancel_bet, is_bet_command, handle_text_bet_command,
+    is_set_bet_command, handle_set_bet_command
 )
 from mines import (
     mines_router, MinesGame, show_mines_menu, process_mines_bet, process_mines_command
@@ -860,8 +862,28 @@ async def games_callback(callback: CallbackQuery, state: FSMContext):
         await callback.answer("🚫 Это не ваша кнопка!", show_alert=True)
         return
     await state.clear()
-    await show_games_hub(callback, active='dice')
+    await show_games_selector(callback, betting_game)
     _set_msg_owner(callback.message.message_id, callback.from_user.id)
+
+@router.callback_query(F.data.startswith("game_"))
+async def game_menu_callback(callback: CallbackQuery, state: FSMContext):
+    _save_username(callback.from_user.id, callback.from_user.username or "", callback.from_user.first_name or "")
+    if not _is_msg_owner(callback.message.message_id, callback.from_user.id):
+        await callback.answer("🚫 Это не ваша кнопка!", show_alert=True)
+        return
+    await state.clear()
+    key = callback.data.split("_", 1)[1]
+    handler = {
+        'dice':       show_dice_menu,
+        'football':   show_football_menu,
+        'basketball': show_basketball_menu,
+        'darts':      show_darts_menu,
+        'bowling':    show_bowling_menu,
+    }.get(key)
+    if handler:
+        await handler(callback)
+    else:
+        await callback.answer("❌ Ошибка", show_alert=True)
 
 @router.callback_query(F.data == "mines_menu")
 async def mines_menu_callback(callback: CallbackQuery, state: FSMContext):
@@ -1241,6 +1263,10 @@ async def handle_text_message(message: Message, state: FSMContext):
 
     if is_duel_command(message.text):
         await handle_duel_command(message)
+        return
+
+    if is_set_bet_command(message.text):
+        await handle_set_bet_command(message, betting_game)
         return
 
     if is_bet_command(message.text):
