@@ -34,6 +34,13 @@ MAX_BET = 10000.0
 RATE_LIMIT_SECONDS = 3
 user_last_bet_time: Dict[int, datetime] = {}
 
+# Глобальная ставка пользователя, задаётся сообщением в чат (например "0.1$")
+# и используется для всех эмодзи-игр (кубик/футбол/баскетбол/дартс/боулинг).
+# НЕ действует для Мин, Башни и Золота — там свой ввод ставки.
+user_current_bet: Dict[int, float] = {}
+
+SET_BET_PATTERN = re.compile(r'^\s*(\d+(?:[.,]\d+)?)\s*\$\s*$')
+
 def e(eid: str, fallback: str = "•") -> str:
     return f'<tg-emoji emoji-id="{eid}">{fallback}</tg-emoji>'
 
@@ -260,6 +267,12 @@ class BettingGame:
     def set_referral_system(self, referral_system):
         self.referral_system = referral_system
 
+    def get_current_bet(self, user_id: int) -> Optional[float]:
+        return user_current_bet.get(user_id)
+
+    def set_current_bet(self, user_id: int, amount: float):
+        user_current_bet[user_id] = amount
+
     def is_user_in_game(self, user_id: int) -> bool:
         return user_id in self.active_games
 
@@ -326,6 +339,45 @@ def parse_bet_command(text: str) -> Optional[Tuple[str, float]]:
     if not full_bet_type.startswith(game_prefix):
         return None
     return (full_bet_type, amount)
+
+
+def is_set_bet_command(text: str) -> bool:
+    """Проверяет, является ли сообщение установкой глобальной ставки, например '0.1$'."""
+    if not text:
+        return False
+    return bool(SET_BET_PATTERN.match(text.strip()))
+
+
+async def handle_set_bet_command(message: Message, betting_game: 'BettingGame'):
+    """Устанавливает глобальную ставку пользователя по сообщению вида '0.1$'.
+    Действует для кубика/футбола/баскетбола/дартса/боулинга; на Мины, Башню
+    и Золото не влияет — там свой отдельный ввод ставки."""
+    user_id = message.from_user.id
+    match = SET_BET_PATTERN.match((message.text or '').strip())
+    if not match:
+        return
+
+    amount_str = match.group(1).replace(',', '.')
+    try:
+        amount = float(amount_str)
+    except ValueError:
+        await message.answer(f"{e(EMOJI_CROSS,'❌')} Введите корректную сумму, например: 0.1$")
+        return
+
+    if amount < MIN_BET:
+        await message.answer(f"{e(EMOJI_CROSS,'❌')} Минимальная ставка: {MIN_BET}$")
+        return
+    if amount > MAX_BET:
+        await message.answer(f"{e(EMOJI_CROSS,'❌')} Максимальная ставка: {MAX_BET}$")
+        return
+
+    betting_game.set_current_bet(user_id, amount)
+    await message.answer(
+        f"<blockquote><b>✅ Ставка установлена: <code>{amount:.2f}</code>$</b></blockquote>\n\n"
+        f"<blockquote><i>Действует для Кубика, Футбола, Баскетбола, Дартса и Боулинга.\n"
+        f"Не действует для Мин, Башни и Золота.</i></blockquote>",
+        parse_mode='HTML'
+    )
 
 
 def is_bet_command(text: str) -> bool:
@@ -638,6 +690,73 @@ GAME_TAB_TITLE = {
 }
 
 
+def _max_multiplier(bet_types: dict) -> float:
+    return max(cfg['multiplier'] for cfg in bet_types.values())
+
+
+def _fmt_mult(x: float) -> str:
+    if x == int(x):
+        return str(int(x))
+    return f"{x:g}"
+
+
+GAME_MAX_MULTIPLIER = {
+    'dice':       _max_multiplier(DICE_BET_TYPES),
+    'football':   _max_multiplier(FOOTBALL_BET_TYPES),
+    'basketball': _max_multiplier(BASKETBALL_BET_TYPES),
+    'darts':      _max_multiplier(DART_BET_TYPES),
+    'bowling':    _max_multiplier(BOWLING_BET_TYPES),
+}
+
+
+def build_games_selector_keyboard() -> InlineKeyboardMarkup:
+    rows = []
+    row = []
+    for key in GAME_TAB_ORDER:
+        emoji = GAME_TAB_EMOJI[key]
+        mult  = _fmt_mult(GAME_MAX_MULTIPLIER[key])
+        row.append(InlineKeyboardButton(text=f"{emoji} (до x{mult})", callback_data=f"game_{key}"))
+        if len(row) == 3:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+
+    rows.append([
+        InlineKeyboardButton(text="💣 Мины",  callback_data="mines_menu"),
+        InlineKeyboardButton(text="🏰 Башня", callback_data="tower_menu"),
+    ])
+    rows.append([
+        InlineKeyboardButton(text="🪙 Золото", callback_data="gold_menu"),
+    ])
+    rows.append([
+        InlineKeyboardButton(text="Назад", callback_data="back_to_main", icon_custom_emoji_id=EMOJI_BACK)
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def build_games_selector_text(betting_game: 'BettingGame', user_id: int) -> str:
+    current_bet = betting_game.get_current_bet(user_id)
+    bet_display = f"{current_bet:.2f}" if current_bet else "0"
+    balance = betting_game.get_balance(user_id)
+    return (
+        f"<blockquote><b>🎮 Выберите игру, на которую хотите сделать ставку!</b></blockquote>\n\n"
+        f"<blockquote>➕ Ставка: <code>{bet_display}</code>{e(EMOJI_COIN,'💰')} $\n"
+        f"💳 Баланс: <code>{balance:.2f}</code>{e(EMOJI_COIN,'💰')} $</blockquote>\n\n"
+    )
+
+
+async def show_games_selector(callback: CallbackQuery, betting_game: 'BettingGame'):
+    """Главный экран раздела игр (аналог референсного скриншота): сетка игр
+    с множителями сверху, текущая ставка и баланс. После выбора игры
+    открывается её обычное меню исходов (show_dice_menu и т.д.)."""
+    user_id = callback.from_user.id
+    text = build_games_selector_text(betting_game, user_id)
+    markup = build_games_selector_keyboard()
+    await safe_edit_message(callback, text, reply_markup=markup, parse_mode='HTML')
+    await callback.answer()
+
+
 def _tabs_row(active: str) -> list:
     row = []
     for key in GAME_TAB_ORDER:
@@ -787,7 +906,7 @@ async def show_exact_number_menu(callback: CallbackQuery):
             InlineKeyboardButton(text="(x5.7)", callback_data="bet_dice_куб_6", icon_custom_emoji_id="5390966190283694453")
         ],
         [
-            InlineKeyboardButton(text="Назад", callback_data="gtab_dice", icon_custom_emoji_id=EMOJI_BACK)
+            InlineKeyboardButton(text="Назад", callback_data="game_dice", icon_custom_emoji_id=EMOJI_BACK)
         ]
     ])
     await safe_edit_message(callback,
@@ -883,6 +1002,9 @@ async def show_bowling_menu(callback: CallbackQuery):
 
 
 async def request_amount(callback: CallbackQuery, state: FSMContext, betting_game: BettingGame):
+    """Запускает игру по нажатию кнопки исхода, используя ранее установленную
+    глобальную ставку (задаётся сообщением в чате, например '0.1$'). Если
+    ставка не установлена — просит установить её, вместо запроса суммы."""
     bet_type = callback.data.split('_', 2)[2]
     user_id  = callback.from_user.id
 
@@ -895,24 +1017,65 @@ async def request_amount(callback: CallbackQuery, state: FSMContext, betting_gam
         await callback.answer("⏳ Дождитесь окончания игры!", show_alert=True)
         return
 
-    betting_game.pending_bets[user_id] = bet_type
     bet_config = betting_game.get_bet_config(bet_type)
     if not bet_config:
         await callback.answer("❌ Ошибка", show_alert=True)
         return
 
-    await state.set_state(BetStates.waiting_for_amount)
-    balance = betting_game.get_balance(user_id)
+    amount = betting_game.get_current_bet(user_id)
+    if amount is None:
+        await callback.answer(
+            "❌ Ставка не установлена!\n"
+            "Отправьте сумму в чат, например: 0.1$\n"
+            "Действует для всех игр, кроме Мин, Башни и Золота.",
+            show_alert=True
+        )
+        return
 
-    markup = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="Отмена", callback_data="cancel_bet", icon_custom_emoji_id=EMOJI_BACK)
-    ]])
-    await callback.message.edit_text(
-        f"<blockquote><b>{e(EMOJI_EDIT,'✏️')} Введите сумму ставки</b></blockquote>\n\n",
-        parse_mode='HTML',
-        reply_markup=markup
-    )
+    balance = betting_game.get_balance(user_id)
+    if balance < amount:
+        await callback.answer(
+            f"❌ Недостаточно средств! Ваш баланс: {balance:.2f}$",
+            show_alert=True
+        )
+        return
+
+    if not betting_game.subtract_balance(user_id, amount):
+        await callback.answer("❌ Ошибка при снятии средств", show_alert=True)
+        return
+
+    asyncio.create_task(notify_referrer_commission(user_id, amount))
+
+    nickname = callback.from_user.first_name or ""
+    if callback.from_user.last_name:
+        nickname += f" {callback.from_user.last_name}"
+    nickname = nickname.strip() or callback.from_user.username or "Игрок"
+
+    betting_game.start_game(user_id)
     await callback.answer()
+
+    try:
+        if bet_type in ['куб_2меньше', 'куб_2больше']:
+            await play_double_dice_game(
+                callback.message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game
+            )
+        elif bet_type.startswith('боулинг_') and bet_config.get('special') == 'bowling_vs':
+            await play_bowling_vs_game(
+                callback.message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game
+            )
+        else:
+            await play_single_dice_game(
+                callback.message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game
+            )
+    except Exception as ex:
+        logging.error(f"Ошибка при отправке кубика (до броска): {ex}")
+        betting_game.add_balance(user_id, amount)
+        try:
+            await callback.message.answer("❌ Не удалось начать игру. Средства возвращены.")
+        except Exception:
+            pass
+    finally:
+        betting_game.end_game(user_id)
 
 
 async def process_bet_amount(message: Message, state: FSMContext, betting_game: BettingGame):
