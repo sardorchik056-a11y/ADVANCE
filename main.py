@@ -79,7 +79,7 @@ except ImportError:
     def db_get_user(user_id): return {}
     def db_get_user_last_games(user_id, limit=10): return []
 
-BOT_TOKEN = "8313200591:AAHCAkbKqpcYr8l5IPHiaDY08PzaxEAxBR4"
+BOT_TOKEN = "8651956926:AAG3ML1uGBPQOgrM5WAMl3kXaRLvVxTHCsw"
 
 LINK_NEWS     = "https://t.me/egonewsg"
 LINK_CHAT     = "https://t.me/egogruf"
