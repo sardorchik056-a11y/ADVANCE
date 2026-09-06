@@ -1,5 +1,5 @@
 import asyncio
-from aiogram import Bot
+from aiogram import Bot, Router, F  # <-- добавил Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -7,6 +7,9 @@ import logging
 import re
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Tuple
+
+# ========== СОЗДАЁМ РОУТЕР СРАЗУ ПОСЛЕ ИМПОРТОВ ==========
+router = Router()
 
 try:
     from database import save_game_result as db_save_game_result, update_balance as db_update_balance
@@ -78,7 +81,6 @@ DICE_BET_TYPES = {
     'куб_бол':     {'name': '📈 Больше (4-6)',      'values': [4, 5, 6], 'multiplier': 1.9},
     'куб_2меньше': {'name': '🎲🎲 Оба меньше 4',   'multiplier': 3.8, 'special': 'double_dice'},
     'куб_2больше': {'name': '🎲🎲 Оба больше 3',   'multiplier': 3.8, 'special': 'double_dice'},
-    'куб_2ровно7': {'name': '🎲🎲 Ровно 7',        'multiplier': 6.0, 'special': 'double_dice_exact'},
     'куб_1':       {'name': '1️⃣',                  'values': [1], 'multiplier': 5.7},
     'куб_2':       {'name': '2️⃣',                  'values': [2], 'multiplier': 5.7},
     'куб_3':       {'name': '3️⃣',                  'values': [3], 'multiplier': 5.7},
@@ -211,9 +213,6 @@ BET_TYPE_MAPPING = {
     '2бол':      'куб_2больше',
     'обабольше': 'куб_2больше',
     'bothmore':  'куб_2больше',
-    
-    '2ровно7':   'куб_2ровно7',
-    'ровно7':    'куб_2ровно7',
 
     '1': 'куб_1',
     '2': 'куб_2',
@@ -554,8 +553,6 @@ async def play_double_dice_game(
         is_win = dice1_value < 4 and dice2_value < 4
     elif bet_type == 'куб_2больше':
         is_win = dice1_value > 3 and dice2_value > 3
-    elif bet_type == 'куб_2ровно7':
-        is_win = total == 7
     elif bet_type.startswith('куб2_'):
         # новые типы для вкладки "2 куба"
         if bet_type == 'куб2_больше7':
@@ -737,7 +734,7 @@ async def handle_text_bet_command(message: Message, betting_game: BettingGame):
             await play_triple_dice_game(
                 message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message
             )
-        elif bet_type.startswith('куб2_') or bet_type in ['куб_2меньше', 'куб_2больше', 'куб_2ровно7']:
+        elif bet_type.startswith('куб2_') or bet_type in ['куб_2меньше', 'куб_2больше']:
             # 2 куба
             await play_double_dice_game(
                 message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message
@@ -912,22 +909,22 @@ def _dice_outcome_rows(active: str) -> list:
     elif active == '2куба':
         return [
             [
-                InlineKeyboardButton(text="Меньше 7 (x2.4)", callback_data="bet_dice2_куб2_меньше7", icon_custom_emoji_id=EMOJI_2LESS),
-                InlineKeyboardButton(text="Больше 7 (x2.4)", callback_data="bet_dice2_куб2_больше7", icon_custom_emoji_id=EMOJI_2MORE)
+                InlineKeyboardButton(text="Меньше 7 (x2.4)", callback_data="bet_dice_куб2_меньше7", icon_custom_emoji_id=EMOJI_2LESS),
+                InlineKeyboardButton(text="Больше 7 (x2.4)", callback_data="bet_dice_куб2_больше7", icon_custom_emoji_id=EMOJI_2MORE)
             ],
             [
-                InlineKeyboardButton(text="Ровно 7 (x6.0)", callback_data="bet_dice2_куб2_ровно7", icon_custom_emoji_id=EMOJI_NUMBER)
+                InlineKeyboardButton(text="Ровно 7 (x6.0)", callback_data="bet_dice_куб2_ровно7", icon_custom_emoji_id=EMOJI_NUMBER)
             ],
         ]
     elif active == '3куба':
         return [
             [
-                InlineKeyboardButton(text="Меньше 10 (x2.4)", callback_data="bet_dice3_куб3_меньше10", icon_custom_emoji_id=EMOJI_3LESS),
-                InlineKeyboardButton(text="Больше 10 (x2.4)", callback_data="bet_dice3_куб3_больше10", icon_custom_emoji_id=EMOJI_3MORE)
+                InlineKeyboardButton(text="Меньше 10 (x2.4)", callback_data="bet_dice_куб3_меньше10", icon_custom_emoji_id=EMOJI_3LESS),
+                InlineKeyboardButton(text="Больше 10 (x2.4)", callback_data="bet_dice_куб3_больше10", icon_custom_emoji_id=EMOJI_3MORE)
             ],
             [
-                InlineKeyboardButton(text="Ровно 10 (x6.0)", callback_data="bet_dice3_куб3_ровно10", icon_custom_emoji_id=EMOJI_NUMBER),
-                InlineKeyboardButton(text="Ровно 11 (x6.0)", callback_data="bet_dice3_куб3_ровно11", icon_custom_emoji_id=EMOJI_NUMBER)
+                InlineKeyboardButton(text="Ровно 10 (x6.0)", callback_data="bet_dice_куб3_ровно10", icon_custom_emoji_id=EMOJI_NUMBER),
+                InlineKeyboardButton(text="Ровно 11 (x6.0)", callback_data="bet_dice_куб3_ровно11", icon_custom_emoji_id=EMOJI_NUMBER)
             ],
         ]
     return []
@@ -969,9 +966,11 @@ async def show_dice_menu(callback: CallbackQuery, betting_game: 'BettingGame' = 
     await callback.answer()
 
 
+# --- ХЕНДЛЕР ДЛЯ ПЕРЕКЛЮЧЕНИЯ ВКЛАДОК КУБИКА ---
 @router.callback_query(F.data.startswith("dtabs_"))
-async def dice_tab_switch(callback: CallbackQuery, betting_game: 'BettingGame' = None):
+async def dice_tab_switch(callback: CallbackQuery, state: FSMContext):
     """Переключение между вкладками: 1 куб, 2 куба, 3 куба"""
+    from main import betting_game  # импортируем глобальный объект
     user_id = callback.from_user.id
     active = callback.data.split("_", 1)[1]
     if active not in DICE_TAB_ORDER:
@@ -1161,7 +1160,7 @@ async def request_amount(callback: CallbackQuery, state: FSMContext, betting_gam
             await play_triple_dice_game(
                 callback.message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game
             )
-        elif bet_type.startswith('куб2_') or bet_type in ['куб_2меньше', 'куб_2больше', 'куб_2ровно7']:
+        elif bet_type.startswith('куб2_') or bet_type in ['куб_2меньше', 'куб_2больше']:
             await play_double_dice_game(
                 callback.message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game
             )
@@ -1247,7 +1246,7 @@ async def process_bet_amount(message: Message, state: FSMContext, betting_game: 
                 await play_triple_dice_game(
                     message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message
                 )
-            elif bet_type.startswith('куб2_') or bet_type in ['куб_2меньше', 'куб_2больше', 'куб_2ровно7']:
+            elif bet_type.startswith('куб2_') or bet_type in ['куб_2меньше', 'куб_2больше']:
                 await play_double_dice_game(
                     message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message
                 )
@@ -1290,9 +1289,3 @@ async def cancel_bet(callback: CallbackQuery, state: FSMContext, betting_game: B
 
     from main import games_callback
     await games_callback(callback, state)
-
-
-# Добавляем недостающие импорты для роутера
-from aiogram import Router
-router = Router()
-router.callback_query.register(dice_tab_switch, F.data.startswith("dtabs_"))
