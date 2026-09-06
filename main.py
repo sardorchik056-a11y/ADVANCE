@@ -25,7 +25,8 @@ from game import (
     show_games_hub, build_games_hub_text, build_games_hub_keyboard,
     show_games_selector, build_games_selector_text, build_games_selector_keyboard,
     cancel_bet, is_bet_command, handle_text_bet_command,
-    is_set_bet_command, handle_set_bet_command
+    is_set_bet_command, handle_set_bet_command,
+    router as game_router  # <-- ДОБАВЛЕНО
 )
 from mines import (
     mines_router, MinesGame, show_mines_menu, process_mines_bet, process_mines_command
@@ -1360,7 +1361,7 @@ async def main():
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
-    print("=== БОТ НАЧИНАЕТ ЗАПУСК ===")  # Добавляем print для отладки
+    print("=== БОТ НАЧИНАЕТ ЗАПУСК ===")
     
     try:
         print("Инициализация базы данных...")
@@ -1376,12 +1377,10 @@ async def main():
         print("Сброс активных сеансов...")
         logging.info("Начинаю сброс активных сеансов...")
         try:
-            # 1. Удаляем webhook (если был установлен)
             await bot.delete_webhook(drop_pending_updates=True)
             print("✓ Webhook удален")
             logging.info("✓ Webhook удален")
             
-            # 2. Получаем и сбрасываем все ожидающие обновления
             updates = await bot.get_updates(offset=-1, timeout=1)
             if updates:
                 last_update_id = updates[-1].update_id
@@ -1392,7 +1391,6 @@ async def main():
                 print("✓ Нет ожидающих обновлений")
                 logging.info("✓ Нет ожидающих обновлений")
             
-            # 3. Очищаем локальные кэши
             _transfer_locks.clear()
             _msg_owners.clear()
             
@@ -1420,6 +1418,7 @@ async def main():
         dp.include_router(broadcast_router)
         dp.include_router(helper_router)
         dp.include_router(router)
+        dp.include_router(game_router)  # <-- ДОБАВЛЕНО
         dp.include_router(mines_router)
         dp.include_router(tower_router)
         dp.include_router(gold_router)
@@ -1444,7 +1443,6 @@ async def main():
         print("=== ЗАПУСК ПОЛЛИНГА ===")
         logging.info("Бот запущен в режиме поллинга")
         
-        # Запускаем поллинг
         await dp.start_polling(bot)
         
     except Exception as e:
