@@ -67,6 +67,8 @@ EMOJI_CHOOSE_GAME   = "5224708079270013673"  # 🎮 — "Выберите игр
 EMOJI_MINES_BTN     = "5226939456514203548"  # 💣 — кнопка "Мины"
 EMOJI_TOWER_BTN     = "5224707005528188746"  # 🏰 — кнопка "Башня"
 EMOJI_GOLD_BTN      = "5226770767378688325"  # 🪙 — кнопка "Золото"
+EMOJI_CHECK         = "5798517767304912593"  # ✔️ — подтверждение установки ставки
+EMOJI_DOLLAR        = "5798650400189980129"  # 💵 — знак доллара в подтверждении ставки
 
 DICE_BET_TYPES = {
     'куб_нечет':   {'name': '🎲 Нечетное',        'values': [1, 3, 5], 'multiplier': 1.9},
@@ -381,9 +383,7 @@ async def handle_set_bet_command(message: Message, betting_game: 'BettingGame'):
 
     betting_game.set_current_bet(user_id, amount)
     await message.answer(
-        f"<blockquote><b>✅ Ставка установлена: <code>{amount:.2f}</code>$</b></blockquote>\n\n"
-        f"<blockquote><i>Действует для Кубика, Футбола, Баскетбола, Дартса и Боулинга.\n"
-        f"Не действует для Мин, Башни и Золота.</i></blockquote>",
+        f"{e(EMOJI_CHECK, '✔️')} <i>Ставка {amount:.2f}{e(EMOJI_DOLLAR, '💵')} установлена</i>",
         parse_mode='HTML'
     )
 
