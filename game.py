@@ -1,5 +1,5 @@
 import asyncio
-from aiogram import Bot, Router, F  # <-- добавил Router, F
+from aiogram import Bot, Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -37,9 +37,6 @@ MAX_BET = 10000.0
 RATE_LIMIT_SECONDS = 3
 user_last_bet_time: Dict[int, datetime] = {}
 
-# Глобальная ставка пользователя, задаётся сообщением в чат (например "0.1$")
-# и используется для всех эмодзи-игр (кубик/футбол/баскетбол/дартс/боулинг).
-# НЕ действует для Мин, Башни и Золота — там свой ввод ставки.
 user_current_bet: Dict[int, float] = {}
 
 SET_BET_PATTERN = re.compile(r'^\s*(\d+(?:[.,]\d+)?)\s*\$\s*$')
@@ -48,87 +45,85 @@ def e(eid: str, fallback: str = "•") -> str:
     return f'<tg-emoji emoji-id="{eid}">{fallback}</tg-emoji>'
 
 
-EMOJI_BACK   = "5233735937317447077"  # ⬅️ единый back/cancel — как в main.py / referrals.py
-EMOJI_CROSS  = "5906949717859230132"  # ❌ ошибки / некорректный ввод
-EMOJI_EDIT   = "5226595189115625543"  # ✏️ "Введите сумму" — как в referrals.py
-EMOJI_COIN   = "5116648080787112958"  # 💰 — как в main.py / referrals.py
+EMOJI_BACK   = "5233735937317447077"
+EMOJI_CROSS  = "5906949717859230132"
+EMOJI_COIN   = "5116648080787112958"
 EMOJI_CHET       = "5330320040883411678"
 EMOJI_NECHET     = "5391032818111363540"
 EMOJI_MORE       = "5449683594425410231"
 EMOJI_LESS       = "5447183459602669338"
 EMOJI_2MORE      = "5429651785352501917"
 EMOJI_2LESS      = "5429518319243775957"
-EMOJI_3MORE      = "5429651785352501917"  # для 3 кубов больше
-EMOJI_3LESS      = "5429518319243775957"  # для 3 кубов меньше
+EMOJI_3MORE      = "5429651785352501917"
+EMOJI_3LESS      = "5429518319243775957"
 EMOJI_NUMBER     = "5456140674028019486"
 EMOJI_GOAL       = "5206607081334906820"
 EMOJI_3POINT     = "5397782960512444700"
 EMOJI_MISS       = "5210952531676504517"
 
-EMOJI_MAGNIFY       = "5231012545799666522"  # 🔍 — кнопка "Авторские"
-EMOJI_BET_LABEL     = "5224380154221995303"  # 💰 — подпись "Ставка" на главном экране игр
-EMOJI_BALANCE_LABEL = "5224350849660138496"  # 👛 — подпись "Баланс" на главном экране игр
-EMOJI_CHOOSE_GAME   = "5224708079270013673"  # 🎮 — "Выберите игру..."
-EMOJI_MINES_BTN     = "5226939456514203548"  # 💣 — кнопка "Мины"
-EMOJI_TOWER_BTN     = "5224707005528188746"  # 🏰 — кнопка "Башня"
-EMOJI_GOLD_BTN      = "5226770767378688325"  # 🪙 — кнопка "Золото"
+EMOJI_MAGNIFY       = "5231012545799666522"
+EMOJI_BET_LABEL     = "5224380154221995303"
+EMOJI_BALANCE_LABEL = "5224350849660138496"
+EMOJI_CHOOSE_GAME   = "5224708079270013673"
+EMOJI_MINES_BTN     = "5226939456514203548"
+EMOJI_TOWER_BTN     = "5224707005528188746"
+EMOJI_GOLD_BTN      = "5226770767378688325"
 
 # --- ТИПЫ СТАВОК ДЛЯ 1 КУБА ---
 DICE_BET_TYPES = {
-    'куб_нечет':   {'name': '🎲 Нечетное',        'values': [1, 3, 5], 'multiplier': 1.9},
-    'куб_чет':     {'name': '🎲 Четное',           'values': [2, 4, 6], 'multiplier': 1.9},
-    'куб_мал':     {'name': '📉 Меньше (1-3)',      'values': [1, 2, 3], 'multiplier': 1.9},
-    'куб_бол':     {'name': '📈 Больше (4-6)',      'values': [4, 5, 6], 'multiplier': 1.9},
-    'куб_2меньше': {'name': '🎲🎲 Оба меньше 4',   'multiplier': 3.8, 'special': 'double_dice'},
-    'куб_2больше': {'name': '🎲🎲 Оба больше 3',   'multiplier': 3.8, 'special': 'double_dice'},
-    'куб_1':       {'name': '1️⃣',                  'values': [1], 'multiplier': 5.7},
-    'куб_2':       {'name': '2️⃣',                  'values': [2], 'multiplier': 5.7},
-    'куб_3':       {'name': '3️⃣',                  'values': [3], 'multiplier': 5.7},
-    'куб_4':       {'name': '4️⃣',                  'values': [4], 'multiplier': 5.7},
-    'куб_5':       {'name': '5️⃣',                  'values': [5], 'multiplier': 5.7},
-    'куб_6':       {'name': '6️⃣',                  'values': [6], 'multiplier': 5.7},
+    'куб_нечет':   {'values': [1, 3, 5], 'multiplier': 1.9},
+    'куб_чет':     {'values': [2, 4, 6], 'multiplier': 1.9},
+    'куб_мал':     {'values': [1, 2, 3], 'multiplier': 1.9},
+    'куб_бол':     {'values': [4, 5, 6], 'multiplier': 1.9},
+    'куб_1':       {'values': [1], 'multiplier': 5.7},
+    'куб_2':       {'values': [2], 'multiplier': 5.7},
+    'куб_3':       {'values': [3], 'multiplier': 5.7},
+    'куб_4':       {'values': [4], 'multiplier': 5.7},
+    'куб_5':       {'values': [5], 'multiplier': 5.7},
+    'куб_6':       {'values': [6], 'multiplier': 5.7},
 }
 
 # --- ТИПЫ СТАВОК ДЛЯ 2 КУБОВ ---
 DICE_2_BET_TYPES = {
-    'куб2_больше7': {'name': '🎲🎲 Больше 7',  'multiplier': 2.4, 'special': 'double_dice_sum'},
-    'куб2_меньше7': {'name': '🎲🎲 Меньше 7',  'multiplier': 2.4, 'special': 'double_dice_sum'},
-    'куб2_ровно7':  {'name': '🎲🎲 Ровно 7',   'multiplier': 6.0, 'special': 'double_dice_exact'},
+    'куб2_обачет':   {'multiplier': 2.4, 'special': 'double_dice_parity'},
+    'куб2_обанечет': {'multiplier': 2.4, 'special': 'double_dice_parity'},
+    'куб2_больше7':  {'multiplier': 2.4, 'special': 'double_dice_sum'},
+    'куб2_меньше7':  {'multiplier': 2.4, 'special': 'double_dice_sum'},
+    'куб2_ровно7':   {'multiplier': 6.0, 'special': 'double_dice_exact'},
 }
 
 # --- ТИПЫ СТАВОК ДЛЯ 3 КУБОВ ---
 DICE_3_BET_TYPES = {
-    'куб3_больше10': {'name': '🎲🎲🎲 Больше 10',  'multiplier': 2.4, 'special': 'triple_dice_sum'},
-    'куб3_меньше10': {'name': '🎲🎲🎲 Меньше 10',  'multiplier': 2.4, 'special': 'triple_dice_sum'},
-    'куб3_ровно10':  {'name': '🎲🎲🎲 Ровно 10',   'multiplier': 6.0, 'special': 'triple_dice_exact'},
-    'куб3_ровно11':  {'name': '🎲🎲🎲 Ровно 11',   'multiplier': 6.0, 'special': 'triple_dice_exact'},
+    'куб3_3чет':    {'multiplier': 8.0, 'special': 'triple_dice_parity'},
+    'куб3_3нечет':  {'multiplier': 8.0, 'special': 'triple_dice_parity'},
+    'куб3_больше10': {'multiplier': 2.4, 'special': 'triple_dice_sum'},
+    'куб3_меньше10': {'multiplier': 2.4, 'special': 'triple_dice_sum'},
 }
 
 BASKETBALL_BET_TYPES = {
-    'баскет_гол':    {'name': '🏀 Гол (2 очка)',  'values': [4, 5], 'multiplier': 1.85},
-    'баскет_мимо':   {'name': '🏀 Мимо',          'values': [1, 2, 3], 'multiplier': 1.7},
-    'баскет_3очка':  {'name': '🏀 3-очковый',     'values': [5], 'multiplier': 5.7},
+    'баскет_гол':    {'values': [4, 5], 'multiplier': 1.85},
+    'баскет_мимо':   {'values': [1, 2, 3], 'multiplier': 1.7},
+    'баскет_3очка':  {'values': [5], 'multiplier': 5.7},
 }
 
 FOOTBALL_BET_TYPES = {
-    'футбол_гол':  {'name': '⚽ Гол',  'values': [3, 4, 5], 'multiplier': 1.35},
-    'футбол_мимо': {'name': '⚽ Мимо', 'values': [1, 2],    'multiplier': 1.75},
+    'футбол_гол':  {'values': [3, 4, 5], 'multiplier': 1.35},
+    'футбол_мимо': {'values': [1, 2],    'multiplier': 1.75},
 }
 
 DART_BET_TYPES = {
-    'дартс_белое':   {'name': '⚪ Белое',  'values': [3, 5],    'multiplier': 2.35},
-    'дартс_красное': {'name': '🔴 Красное','values': [2, 4, 6], 'multiplier': 1.9},
-    'дартс_мимо':    {'name': '❌ Мимо',   'values': [1],       'multiplier': 5.7},
-    'дартс_центр':   {'name': '🎯 Центр',  'values': [6],       'multiplier': 5.7},
+    'дартс_белое':   {'values': [3, 5],    'multiplier': 2.35},
+    'дартс_красное': {'values': [2, 4, 6], 'multiplier': 1.9},
+    'дартс_мимо':    {'values': [1],       'multiplier': 5.7},
+    'дартс_центр':   {'values': [6],       'multiplier': 5.7},
 }
 
 BOWLING_BET_TYPES = {
-    'боулинг_поражение': {'name': '🎳 Поражение', 'values': [], 'multiplier': 1.8, 'special': 'bowling_vs'},
-    'боулинг_победа':    {'name': '🎳 Победа',    'values': [], 'multiplier': 1.8, 'special': 'bowling_vs'},
-    'боулинг_страйк':    {'name': '🎳 Страйк',    'values': [6], 'multiplier': 5.7},
+    'боулинг_поражение': {'values': [], 'multiplier': 1.8, 'special': 'bowling_vs'},
+    'боулинг_победа':    {'values': [], 'multiplier': 1.8, 'special': 'bowling_vs'},
+    'боулинг_страйк':    {'values': [6], 'multiplier': 5.7},
 }
 
-# Маппинг префикса ставки → читаемое название игры для БД
 _BET_TYPE_DISPLAY_NAMES = {
     'куб_':     'Кубик',
     'куб2_':    '2 Куба',
@@ -152,23 +147,19 @@ COMMAND_MAPPING = {
     'foot':       'футбол',
     'футбол':     'футбол',
     'football':   'футбол',
-
     'баскет':     'баскет',
     'basket':     'баскет',
     'basketball': 'баскет',
     'баскетбол':  'баскет',
     'bask':       'баскет',
-
     'куб':    'куб',
     'dice':   'куб',
     'кубик':  'куб',
     'cube':   'куб',
-
     'дартс': 'дартс',
     'dart':  'дартс',
     'darts': 'дартс',
     'дарт':  'дартс',
-
     'боулинг': 'боулинг',
     'bowling': 'боулинг',
     'боул':    'боулинг',
@@ -181,70 +172,47 @@ BET_TYPE_MAPPING = {
     '3':        'баскет_3очка',
     'три':      'баскет_3очка',
     'three':    'баскет_3очка',
-
     'нечет':    'куб_нечет',
     'odd':      'куб_нечет',
     'нечетное': 'куб_нечет',
     'нечётное': 'куб_нечет',
-
     'чет':    'куб_чет',
     'even':   'куб_чет',
     'четное': 'куб_чет',
     'чётное': 'куб_чет',
-
     'мал':    'куб_мал',
     'small':  'куб_мал',
     'меньше': 'куб_мал',
     'less':   'куб_мал',
-
     'бол':    'куб_бол',
     'big':    'куб_бол',
     'больше': 'куб_бол',
     'more':   'куб_бол',
-
-    '2меньше':    'куб_2меньше',
-    '2less':      'куб_2меньше',
-    '2мал':       'куб_2меньше',
-    'обаменьше':  'куб_2меньше',
-    'bothless':   'куб_2меньше',
-
-    '2больше':   'куб_2больше',
-    '2more':     'куб_2больше',
-    '2бол':      'куб_2больше',
-    'обабольше': 'куб_2больше',
-    'bothmore':  'куб_2больше',
-
     '1': 'куб_1',
     '2': 'куб_2',
     '3': 'куб_3',
     '4': 'куб_4',
     '5': 'куб_5',
     '6': 'куб_6',
-
     'белое':   'дартс_белое',
     'white':   'дартс_белое',
     'белый':   'дартс_белое',
     'бел':     'дартс_белое',
-
     'красное': 'дартс_красное',
     'red':     'дартс_красное',
     'красный': 'дартс_красное',
     'крас':    'дартс_красное',
-
     'центр':  'дартс_центр',
     'center': 'дартс_центр',
     'bull':   'дартс_центр',
-
     'победа':    'боулинг_победа',
     'win':       'боулинг_победа',
     'victory':   'боулинг_победа',
     'побед':     'боулинг_победа',
-
     'поражение': 'боулинг_поражение',
     'lose':      'боулинг_поражение',
     'loss':      'боулинг_поражение',
     'пораж':     'боулинг_поражение',
-
     'страйк': 'боулинг_страйк',
     'strike': 'боулинг_страйк',
     'стр':    'боулинг_страйк',
@@ -377,16 +345,12 @@ def parse_bet_command(text: str) -> Optional[Tuple[str, float]]:
 
 
 def is_set_bet_command(text: str) -> bool:
-    """Проверяет, является ли сообщение установкой глобальной ставки, например '0.1$'."""
     if not text:
         return False
     return bool(SET_BET_PATTERN.match(text.strip()))
 
 
 async def handle_set_bet_command(message: Message, betting_game: 'BettingGame'):
-    """Устанавливает глобальную ставку пользователя по сообщению вида '0.1$'.
-    Действует для кубика/футбола/баскетбола/дартса/боулинга; на Мины, Башню
-    и Золото не влияет — там свой отдельный ввод ставки."""
     user_id = message.from_user.id
     match = SET_BET_PATTERN.match((message.text or '').strip())
     if not match:
@@ -449,7 +413,6 @@ def _apply_game_result(
     betting_game: 'BettingGame',
     bet_type: str = '',
 ) -> float:
-    """Применяет результат игры: начисляет/не начисляет, пишет в БД и лидеры."""
     game_name = _get_game_display_name(bet_type)
     if is_win:
         winnings = amount * bet_config['multiplier']
@@ -547,22 +510,19 @@ async def play_double_dice_game(
     dice1_value = dice1.dice.value
     dice2_value = dice2.dice.value
     total = dice1_value + dice2_value
+    both_even = dice1_value % 2 == 0 and dice2_value % 2 == 0
+    both_odd = dice1_value % 2 == 1 and dice2_value % 2 == 1
 
-    # Обработка 2 кубов
-    if bet_type == 'куб_2меньше':
-        is_win = dice1_value < 4 and dice2_value < 4
-    elif bet_type == 'куб_2больше':
-        is_win = dice1_value > 3 and dice2_value > 3
-    elif bet_type.startswith('куб2_'):
-        # новые типы для вкладки "2 куба"
-        if bet_type == 'куб2_больше7':
-            is_win = total > 7
-        elif bet_type == 'куб2_меньше7':
-            is_win = total < 7
-        elif bet_type == 'куб2_ровно7':
-            is_win = total == 7
-        else:
-            is_win = False
+    if bet_type == 'куб2_обачет':
+        is_win = both_even
+    elif bet_type == 'куб2_обанечет':
+        is_win = both_odd
+    elif bet_type == 'куб2_больше7':
+        is_win = total > 7
+    elif bet_type == 'куб2_меньше7':
+        is_win = total < 7
+    elif bet_type == 'куб2_ровно7':
+        is_win = total == 7
     else:
         is_win = False
 
@@ -584,7 +544,6 @@ async def play_triple_dice_game(
     betting_game: BettingGame,
     reply_to_message: Message = None,
 ):
-    """Игра с 3 кубами для вкладки '3 куба'"""
     send_kwargs = {'chat_id': chat_id, 'emoji': '🎲'}
     if reply_to_message:
         send_kwargs['reply_to_message_id'] = reply_to_message.message_id
@@ -601,16 +560,17 @@ async def play_triple_dice_game(
     dice2_value = dice2.dice.value
     dice3_value = dice3.dice.value
     total = dice1_value + dice2_value + dice3_value
+    all_even = dice1_value % 2 == 0 and dice2_value % 2 == 0 and dice3_value % 2 == 0
+    all_odd = dice1_value % 2 == 1 and dice2_value % 2 == 1 and dice3_value % 2 == 1
 
-    # Обработка 3 кубов
-    if bet_type == 'куб3_больше10':
+    if bet_type == 'куб3_3чет':
+        is_win = all_even
+    elif bet_type == 'куб3_3нечет':
+        is_win = all_odd
+    elif bet_type == 'куб3_больше10':
         is_win = total > 10
     elif bet_type == 'куб3_меньше10':
         is_win = total < 10
-    elif bet_type == 'куб3_ровно10':
-        is_win = total == 10
-    elif bet_type == 'куб3_ровно11':
-        is_win = total == 11
     else:
         is_win = False
 
@@ -728,14 +688,11 @@ async def handle_text_bet_command(message: Message, betting_game: BettingGame):
     betting_game.start_game(user_id)
 
     try:
-        # Проверяем тип игры
         if bet_type.startswith('куб3_'):
-            # 3 куба
             await play_triple_dice_game(
                 message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message
             )
-        elif bet_type.startswith('куб2_') or bet_type in ['куб_2меньше', 'куб_2больше']:
-            # 2 куба
+        elif bet_type.startswith('куб2_'):
             await play_double_dice_game(
                 message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message
             )
@@ -744,7 +701,6 @@ async def handle_text_bet_command(message: Message, betting_game: BettingGame):
                 message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message
             )
         else:
-            # 1 куб
             await play_single_dice_game(
                 message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message
             )
@@ -771,9 +727,7 @@ async def safe_edit_message(callback: CallbackQuery, text: str, reply_markup=Non
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Единый hub игр: ряд эмодзи-иконок (без подписей) сверху = табы,
-#  под ними — исходы активной игры. Переключение табов правит то же сообщение
-#  (по аналогии с табами в leaders.py), без "Назад" между разделами.
+#  Единый hub игр
 # ─────────────────────────────────────────────────────────────────────────────
 
 GAME_TAB_ORDER = ['dice', 'football', 'basketball', 'darts', 'bowling']
@@ -856,9 +810,6 @@ def build_games_selector_text(betting_game: 'BettingGame', user_id: int) -> str:
 
 
 async def show_games_selector(callback: CallbackQuery, betting_game: 'BettingGame'):
-    """Главный экран раздела игр (аналог референсного скриншота): сетка игр
-    с множителями сверху, текущая ставка и баланс. После выбора игры
-    открывается её обычное меню исходов (show_dice_menu и т.д.)."""
     user_id = callback.from_user.id
     text = build_games_selector_text(betting_game, user_id)
     markup = build_games_selector_keyboard()
@@ -866,7 +817,7 @@ async def show_games_selector(callback: CallbackQuery, betting_game: 'BettingGam
     await callback.answer()
 
 
-# --- ТАБЫ ДЛЯ КУБИКА (1 куб, 2 куба, 3 куба) ---
+# --- ТАБЫ ДЛЯ КУБИКА ---
 DICE_TAB_ORDER = ['1куб', '2куба', '3куба']
 
 DICE_TAB_EMOJI = {
@@ -894,38 +845,26 @@ def _dice_tabs_row(active: str) -> list:
 def _dice_outcome_rows(active: str) -> list:
     if active == '1куб':
         return [
-            [
-                InlineKeyboardButton(text="Нечет (x1.9)", callback_data="bet_dice_куб_нечет", icon_custom_emoji_id=EMOJI_NECHET),
-                InlineKeyboardButton(text="Чет (x1.9)",   callback_data="bet_dice_куб_чет",   icon_custom_emoji_id=EMOJI_CHET)
-            ],
-            [
-                InlineKeyboardButton(text="Меньше (x1.9)", callback_data="bet_dice_куб_мал", icon_custom_emoji_id=EMOJI_LESS),
-                InlineKeyboardButton(text="Больше (x1.9)", callback_data="bet_dice_куб_бол", icon_custom_emoji_id=EMOJI_MORE)
-            ],
-            [
-                InlineKeyboardButton(text="Точное число (x5.7)", callback_data="bet_dice_exact", icon_custom_emoji_id=EMOJI_NUMBER)
-            ],
+            [InlineKeyboardButton(text="Нечет (x1.9)", callback_data="bet_dice_куб_нечет")],
+            [InlineKeyboardButton(text="Чет (x1.9)", callback_data="bet_dice_куб_чет")],
+            [InlineKeyboardButton(text="Меньше (x1.9)", callback_data="bet_dice_куб_мал")],
+            [InlineKeyboardButton(text="Больше (x1.9)", callback_data="bet_dice_куб_бол")],
+            [InlineKeyboardButton(text="Точное число (x5.7)", callback_data="bet_dice_exact")],
         ]
     elif active == '2куба':
         return [
-            [
-                InlineKeyboardButton(text="Меньше 7 (x2.4)", callback_data="bet_dice_куб2_меньше7", icon_custom_emoji_id=EMOJI_2LESS),
-                InlineKeyboardButton(text="Больше 7 (x2.4)", callback_data="bet_dice_куб2_больше7", icon_custom_emoji_id=EMOJI_2MORE)
-            ],
-            [
-                InlineKeyboardButton(text="Ровно 7 (x6.0)", callback_data="bet_dice_куб2_ровно7", icon_custom_emoji_id=EMOJI_NUMBER)
-            ],
+            [InlineKeyboardButton(text="Оба чёт (x2.4)", callback_data="bet_dice2_куб2_обачет")],
+            [InlineKeyboardButton(text="Оба нечёт (x2.4)", callback_data="bet_dice2_куб2_обанечет")],
+            [InlineKeyboardButton(text="Меньше 7 (x2.4)", callback_data="bet_dice2_куб2_меньше7")],
+            [InlineKeyboardButton(text="Больше 7 (x2.4)", callback_data="bet_dice2_куб2_больше7")],
+            [InlineKeyboardButton(text="Ровно 7 (x6.0)", callback_data="bet_dice2_куб2_ровно7")],
         ]
     elif active == '3куба':
         return [
-            [
-                InlineKeyboardButton(text="Меньше 10 (x2.4)", callback_data="bet_dice_куб3_меньше10", icon_custom_emoji_id=EMOJI_3LESS),
-                InlineKeyboardButton(text="Больше 10 (x2.4)", callback_data="bet_dice_куб3_больше10", icon_custom_emoji_id=EMOJI_3MORE)
-            ],
-            [
-                InlineKeyboardButton(text="Ровно 10 (x6.0)", callback_data="bet_dice_куб3_ровно10", icon_custom_emoji_id=EMOJI_NUMBER),
-                InlineKeyboardButton(text="Ровно 11 (x6.0)", callback_data="bet_dice_куб3_ровно11", icon_custom_emoji_id=EMOJI_NUMBER)
-            ],
+            [InlineKeyboardButton(text="3 чёт (x8.0)", callback_data="bet_dice3_куб3_3чет")],
+            [InlineKeyboardButton(text="3 нечёт (x8.0)", callback_data="bet_dice3_куб3_3нечет")],
+            [InlineKeyboardButton(text="Меньше 10 (x2.4)", callback_data="bet_dice3_куб3_меньше10")],
+            [InlineKeyboardButton(text="Больше 10 (x2.4)", callback_data="bet_dice3_куб3_больше10")],
         ]
     return []
 
@@ -957,20 +896,17 @@ def build_dice_hub_text(active: str, betting_game: 'BettingGame' = None, user_id
 
 
 async def show_dice_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
-    """Показывает меню кубика с вкладками: 1 куб, 2 куба, 3 куба"""
     user_id = callback.from_user.id
-    active = '1куб'  # по умолчанию
+    active = '1куб'
     text = build_dice_hub_text(active, betting_game, user_id)
     markup = build_dice_hub_keyboard(active)
     await safe_edit_message(callback, text, reply_markup=markup, parse_mode='HTML')
     await callback.answer()
 
 
-# --- ХЕНДЛЕР ДЛЯ ПЕРЕКЛЮЧЕНИЯ ВКЛАДОК КУБИКА ---
 @router.callback_query(F.data.startswith("dtabs_"))
 async def dice_tab_switch(callback: CallbackQuery, state: FSMContext):
-    """Переключение между вкладками: 1 куб, 2 куба, 3 куба"""
-    from main import betting_game  # импортируем глобальный объект
+    from main import betting_game
     user_id = callback.from_user.id
     active = callback.data.split("_", 1)[1]
     if active not in DICE_TAB_ORDER:
@@ -984,14 +920,14 @@ async def dice_tab_switch(callback: CallbackQuery, state: FSMContext):
 async def show_exact_number_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
     markup = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="(x5.7)", callback_data="bet_dice_куб_1", icon_custom_emoji_id="5382322671679708881"),
-            InlineKeyboardButton(text="(x5.7)", callback_data="bet_dice_куб_2", icon_custom_emoji_id="5381990043642502553"),
-            InlineKeyboardButton(text="(x5.7)", callback_data="bet_dice_куб_3", icon_custom_emoji_id="5381879959335738545")
+            InlineKeyboardButton(text="1 (x5.7)", callback_data="bet_dice_куб_1"),
+            InlineKeyboardButton(text="2 (x5.7)", callback_data="bet_dice_куб_2"),
+            InlineKeyboardButton(text="3 (x5.7)", callback_data="bet_dice_куб_3")
         ],
         [
-            InlineKeyboardButton(text="(x5.7)", callback_data="bet_dice_куб_4", icon_custom_emoji_id="5382054253403577563"),
-            InlineKeyboardButton(text="(x5.7)", callback_data="bet_dice_куб_5", icon_custom_emoji_id="5391197405553107640"),
-            InlineKeyboardButton(text="(x5.7)", callback_data="bet_dice_куб_6", icon_custom_emoji_id="5390966190283694453")
+            InlineKeyboardButton(text="4 (x5.7)", callback_data="bet_dice_куб_4"),
+            InlineKeyboardButton(text="5 (x5.7)", callback_data="bet_dice_куб_5"),
+            InlineKeyboardButton(text="6 (x5.7)", callback_data="bet_dice_куб_6")
         ],
         [
             InlineKeyboardButton(text="Назад", callback_data="game_dice", icon_custom_emoji_id=EMOJI_BACK)
@@ -1007,19 +943,23 @@ async def show_exact_number_menu(callback: CallbackQuery, betting_game: 'Betting
     await callback.answer()
 
 
+# --- ОСТАЛЬНЫЕ МЕНЮ ---
+def _tabs_row(active: str) -> list:
+    row = []
+    for key in GAME_TAB_ORDER:
+        emoji = GAME_TAB_EMOJI[key]
+        text = f"· {emoji} ·" if key == active else emoji
+        row.append(InlineKeyboardButton(text=text, callback_data=f"gtab_{key}"))
+    return row
+
+
 async def show_basketball_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
     markup = InlineKeyboardMarkup(inline_keyboard=[
         _tabs_row('basketball'),
-        [
-            InlineKeyboardButton(text="3-очковый (x5.7)", callback_data="bet_basketball_баскет_3очка", icon_custom_emoji_id=EMOJI_3POINT)
-        ],
-        [
-            InlineKeyboardButton(text="Гол (x1.85)", callback_data="bet_basketball_баскет_гол",  icon_custom_emoji_id=EMOJI_GOAL),
-            InlineKeyboardButton(text="Мимо (x1.7)", callback_data="bet_basketball_баскет_мимо", icon_custom_emoji_id=EMOJI_MISS)
-        ],
-        [
-            InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)
-        ]
+        [InlineKeyboardButton(text="3-очковый (x5.7)", callback_data="bet_basketball_баскет_3очка")],
+        [InlineKeyboardButton(text="Гол (x1.85)", callback_data="bet_basketball_баскет_гол")],
+        [InlineKeyboardButton(text="Мимо (x1.7)", callback_data="bet_basketball_баскет_мимо")],
+        [InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)]
     ])
     header = _bet_balance_block(betting_game, callback.from_user.id) if betting_game else ""
     await safe_edit_message(callback,
@@ -1034,13 +974,9 @@ async def show_basketball_menu(callback: CallbackQuery, betting_game: 'BettingGa
 async def show_football_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
     markup = InlineKeyboardMarkup(inline_keyboard=[
         _tabs_row('football'),
-        [
-            InlineKeyboardButton(text="Гол (x1.35)",  callback_data="bet_football_футбол_гол",  icon_custom_emoji_id=EMOJI_GOAL),
-            InlineKeyboardButton(text="Мимо (x1.75)", callback_data="bet_football_футбол_мимо", icon_custom_emoji_id=EMOJI_MISS)
-        ],
-        [
-            InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)
-        ]
+        [InlineKeyboardButton(text="Гол (x1.35)", callback_data="bet_football_футбол_гол")],
+        [InlineKeyboardButton(text="Мимо (x1.75)", callback_data="bet_football_футбол_мимо")],
+        [InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)]
     ])
     header = _bet_balance_block(betting_game, callback.from_user.id) if betting_game else ""
     await safe_edit_message(callback,
@@ -1055,19 +991,11 @@ async def show_football_menu(callback: CallbackQuery, betting_game: 'BettingGame
 async def show_darts_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
     markup = InlineKeyboardMarkup(inline_keyboard=[
         _tabs_row('darts'),
-        [
-            InlineKeyboardButton(text="⚪Белое (x2.35)",  callback_data="bet_darts_дартс_белое"),
-            InlineKeyboardButton(text="🔴Красное (x1.9)", callback_data="bet_darts_дартс_красное")
-        ],
-        [
-            InlineKeyboardButton(text="Центр (x5.7)", callback_data="bet_darts_дартс_центр", icon_custom_emoji_id=EMOJI_3POINT)
-        ],
-        [
-            InlineKeyboardButton(text="Мимо (x5.7)", callback_data="bet_darts_дартс_мимо", icon_custom_emoji_id=EMOJI_MISS)
-        ],
-        [
-            InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)
-        ]
+        [InlineKeyboardButton(text="Белое (x2.35)", callback_data="bet_darts_дартс_белое")],
+        [InlineKeyboardButton(text="Красное (x1.9)", callback_data="bet_darts_дартс_красное")],
+        [InlineKeyboardButton(text="Центр (x5.7)", callback_data="bet_darts_дартс_центр")],
+        [InlineKeyboardButton(text="Мимо (x5.7)", callback_data="bet_darts_дартс_мимо")],
+        [InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)]
     ])
     header = _bet_balance_block(betting_game, callback.from_user.id) if betting_game else ""
     await safe_edit_message(callback,
@@ -1082,16 +1010,10 @@ async def show_darts_menu(callback: CallbackQuery, betting_game: 'BettingGame' =
 async def show_bowling_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
     markup = InlineKeyboardMarkup(inline_keyboard=[
         _tabs_row('bowling'),
-        [
-            InlineKeyboardButton(text="Победа (x1.8)",    callback_data="bet_bowling_боулинг_победа",    icon_custom_emoji_id=EMOJI_GOAL),
-            InlineKeyboardButton(text="Поражение (x1.8)", callback_data="bet_bowling_боулинг_поражение", icon_custom_emoji_id=EMOJI_MISS)
-        ],
-        [
-            InlineKeyboardButton(text="Страйк (x5.7)", callback_data="bet_bowling_боулинг_страйк", icon_custom_emoji_id=EMOJI_3POINT)
-        ],
-        [
-            InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)
-        ]
+        [InlineKeyboardButton(text="Победа (x1.8)", callback_data="bet_bowling_боулинг_победа")],
+        [InlineKeyboardButton(text="Поражение (x1.8)", callback_data="bet_bowling_боулинг_поражение")],
+        [InlineKeyboardButton(text="Страйк (x5.7)", callback_data="bet_bowling_боулинг_страйк")],
+        [InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)]
     ])
     header = _bet_balance_block(betting_game, callback.from_user.id) if betting_game else ""
     await safe_edit_message(callback,
@@ -1104,9 +1026,6 @@ async def show_bowling_menu(callback: CallbackQuery, betting_game: 'BettingGame'
 
 
 async def request_amount(callback: CallbackQuery, state: FSMContext, betting_game: BettingGame):
-    """Запускает игру по нажатию кнопки исхода, используя ранее установленную
-    глобальную ставку (задаётся сообщением в чате, например '0.1$'). Если
-    ставка не установлена — просит установить её, вместо запроса суммы."""
     bet_type = callback.data.split('_', 2)[2]
     user_id  = callback.from_user.id
 
@@ -1155,12 +1074,11 @@ async def request_amount(callback: CallbackQuery, state: FSMContext, betting_gam
     await callback.answer()
 
     try:
-        # Определяем тип игры по префиксу
         if bet_type.startswith('куб3_'):
             await play_triple_dice_game(
                 callback.message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game
             )
-        elif bet_type.startswith('куб2_') or bet_type in ['куб_2меньше', 'куб_2больше']:
+        elif bet_type.startswith('куб2_'):
             await play_double_dice_game(
                 callback.message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game
             )
@@ -1246,7 +1164,7 @@ async def process_bet_amount(message: Message, state: FSMContext, betting_game: 
                 await play_triple_dice_game(
                     message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message
                 )
-            elif bet_type.startswith('куб2_') or bet_type in ['куб_2меньше', 'куб_2больше']:
+            elif bet_type.startswith('куб2_'):
                 await play_double_dice_game(
                     message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message
                 )
