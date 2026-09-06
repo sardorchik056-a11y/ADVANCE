@@ -145,6 +145,84 @@ def _get_game_display_name(bet_type: str) -> str:
     return 'Эмодзи'
 
 
+# --- Короткие коды ставок для callback_data (чтобы уложиться в лимит Telegram 64 байта) ---
+BET_TYPE_TO_CODE = {
+    'куб_нечет': 'd_odd', 'куб_чет': 'd_evn', 'куб_мал': 'd_low', 'куб_бол': 'd_hig',
+    'куб_1': 'd_1', 'куб_2': 'd_2', 'куб_3': 'd_3', 'куб_4': 'd_4', 'куб_5': 'd_5', 'куб_6': 'd_6',
+    'куб2_сумма_ровно7': 's_eq7', 'куб2_сумма_больше7': 's_gt7', 'куб2_сумма_меньше7': 's_lt7',
+    'куб2_обачет': 's_bev', 'куб2_обанечет': 's_bod', 'куб2_любойдубль': 's_dbl',
+    'куб2_конкретныйдубль': 's_sdbl', 'куб2_произведение': 's_prod',
+    'куб3_3чет': 't_ev', 'куб3_3нечет': 't_od', 'куб3_больше10': 't_gt10', 'куб3_меньше10': 't_lt10',
+    'куб3_любойтрипл': 't_trp', 'куб3_конкретныйтрипл': 't_strp', 'куб3_произведение': 't_prod',
+    'баскет_гол': 'bk_g', 'баскет_мимо': 'bk_m', 'баскет_3очка': 'bk_3',
+    'футбол_гол': 'fb_g', 'футбол_мимо': 'fb_m',
+    'дартс_белое': 'dt_w', 'дартс_красное': 'dt_r', 'дартс_мимо': 'dt_m', 'дартс_центр': 'dt_c',
+    'боулинг_поражение': 'bw_l', 'боулинг_победа': 'bw_w', 'боулинг_страйк': 'bw_s',
+}
+CODE_TO_BET_TYPE = {v: k for k, v in BET_TYPE_TO_CODE.items()}
+
+_OUTCOME_LABELS = {
+    'куб_нечет': 'Нечёт', 'куб_чет': 'Чёт', 'куб_мал': 'Меньше (1-3)', 'куб_бол': 'Больше (4-6)',
+    'куб_1': 'Число 1', 'куб_2': 'Число 2', 'куб_3': 'Число 3', 'куб_4': 'Число 4', 'куб_5': 'Число 5', 'куб_6': 'Число 6',
+    'куб2_сумма_ровно7': 'Сумма = 7', 'куб2_сумма_больше7': 'Сумма > 7', 'куб2_сумма_меньше7': 'Сумма < 7',
+    'куб2_обачет': 'Оба чёт', 'куб2_обанечет': 'Оба нечёт', 'куб2_любойдубль': 'Любой дубль',
+    'куб2_произведение': 'Произведение ≥18',
+    'куб3_3чет': 'Три чёт', 'куб3_3нечет': 'Три нечёт', 'куб3_больше10': 'Сумма > 10', 'куб3_меньше10': 'Сумма < 10',
+    'куб3_любойтрипл': 'Любой трипл', 'куб3_произведение': 'Произведение ≥108',
+    'баскет_гол': 'Гол', 'баскет_мимо': 'Мимо', 'баскет_3очка': '3-очковый',
+    'футбол_гол': 'Гол', 'футбол_мимо': 'Мимо',
+    'дартс_белое': 'Белое', 'дартс_красное': 'Красное', 'дартс_мимо': 'Мимо', 'дартс_центр': 'Центр',
+    'боулинг_поражение': 'Поражение', 'боулинг_победа': 'Победа', 'боулинг_страйк': 'Страйк',
+}
+
+
+def _get_outcome_label(bet_type: str, bet_config: dict) -> str:
+    if bet_type == 'куб2_конкретныйдубль':
+        t = bet_config.get('target', 0)
+        return f'Дубль {t},{t}'
+    if bet_type == 'куб3_конкретныйтрипл':
+        t = bet_config.get('target', 0)
+        return f'Трипл {t},{t},{t}'
+    return _OUTCOME_LABELS.get(bet_type, _get_game_display_name(bet_type))
+
+
+def _bet_emoji_for(bet_type: str) -> str:
+    if bet_type.startswith('куб'):
+        return "🎲"
+    elif bet_type.startswith('баскет_'):
+        return "🏀"
+    elif bet_type.startswith('футбол_'):
+        return "⚽"
+    elif bet_type.startswith('дартс_'):
+        return "🎯"
+    elif bet_type.startswith('боулинг_'):
+        return "🎳"
+    return "🎲"
+
+
+def _build_replay_keyboard(user_id: int, bet_type: str, amount: float, bet_config: dict) -> Optional[InlineKeyboardMarkup]:
+    code = BET_TYPE_TO_CODE.get(bet_type)
+    if not code:
+        return None
+    target = bet_config.get('target') if bet_type in ('куб2_конкретныйдубль', 'куб3_конкретныйтрипл') else None
+    target_str = str(target) if target is not None else ''
+
+    def _cb(amt: float) -> str:
+        amt = max(MIN_BET, min(MAX_BET, amt))
+        return f"replay:{user_id}:{code}:{amt:.2f}:{target_str}"
+
+    double_amt = min(round(amount * 2, 2), MAX_BET)
+    half_amt = max(round(amount / 2, 2), MIN_BET)
+
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"🔄 Повторить ({amount:.2f}$)", callback_data=_cb(amount))],
+        [
+            InlineKeyboardButton(text=f"📈 x2 ({double_amt:.2f}$)", callback_data=_cb(double_amt)),
+            InlineKeyboardButton(text=f"📉 ÷2 ({half_amt:.2f}$)", callback_data=_cb(half_amt)),
+        ],
+    ])
+
+
 COMMAND_MAPPING = {
     'фут':        'футбол',
     'fut':        'футбол',
@@ -396,16 +474,16 @@ def is_bet_command(text: str) -> bool:
     return game in COMMAND_MAPPING
 
 
-async def _safe_reply(target_message: Message, text: str, parse_mode: str = 'HTML'):
+async def _safe_reply(target_message: Message, text: str, parse_mode: str = 'HTML', reply_markup=None):
     try:
-        await target_message.reply(text, parse_mode=parse_mode)
+        await target_message.reply(text, parse_mode=parse_mode, reply_markup=reply_markup)
     except Exception as e:
         logging.warning(f"[safe_reply] Не удалось отправить результат игры: {e}")
 
 
-async def _delayed_safe_reply(target_message: Message, text: str, delay: float = 3.0, parse_mode: str = 'HTML'):
+async def _delayed_safe_reply(target_message: Message, text: str, delay: float = 3.0, parse_mode: str = 'HTML', reply_markup=None):
     await asyncio.sleep(delay)
-    await _safe_reply(target_message, text, parse_mode=parse_mode)
+    await _safe_reply(target_message, text, parse_mode=parse_mode, reply_markup=reply_markup)
 
 
 def _apply_game_result(
@@ -461,24 +539,13 @@ async def play_single_dice_game(
     bet_type: str,
     bet_config: dict,
     betting_game: BettingGame,
-    reply_to_message: Message = None,
+    bet_msg: Message = None,
 ):
-    if bet_type.startswith('куб_'):
-        emoji = "🎲"
-    elif bet_type.startswith('баскет_'):
-        emoji = "🏀"
-    elif bet_type.startswith('футбол_'):
-        emoji = "⚽"
-    elif bet_type.startswith('дартс_'):
-        emoji = "🎯"
-    elif bet_type.startswith('боулинг_'):
-        emoji = "🎳"
-    else:
-        emoji = "🎲"
+    emoji = _bet_emoji_for(bet_type)
 
     send_kwargs = {'chat_id': chat_id, 'emoji': emoji}
-    if reply_to_message:
-        send_kwargs['reply_to_message_id'] = reply_to_message.message_id
+    if bet_msg:
+        send_kwargs['reply_to_message_id'] = bet_msg.message_id
 
     dice_message = await betting_game.bot.send_dice(**send_kwargs)
     dice_value = dice_message.dice.value
@@ -489,7 +556,8 @@ async def play_single_dice_game(
     )
 
     text = _build_win_text(nickname, winnings) if is_win else _build_lose_text(nickname)
-    asyncio.create_task(_delayed_safe_reply(dice_message, text, delay=3.0))
+    keyboard = _build_replay_keyboard(user_id, bet_type, amount, bet_config)
+    asyncio.create_task(_delayed_safe_reply(dice_message, text, delay=3.0, reply_markup=keyboard))
 
 
 async def play_double_dice_game(
@@ -500,16 +568,19 @@ async def play_double_dice_game(
     bet_type: str,
     bet_config: dict,
     betting_game: BettingGame,
-    reply_to_message: Message = None,
+    bet_msg: Message = None,
 ):
     send_kwargs = {'chat_id': chat_id, 'emoji': '🎲'}
-    if reply_to_message:
-        send_kwargs['reply_to_message_id'] = reply_to_message.message_id
+    if bet_msg:
+        send_kwargs['reply_to_message_id'] = bet_msg.message_id
 
     dice1 = await betting_game.bot.send_dice(**send_kwargs)
     await asyncio.sleep(2)
 
-    dice2 = await betting_game.bot.send_dice(chat_id=chat_id, emoji='🎲')
+    dice2_kwargs = {'chat_id': chat_id, 'emoji': '🎲'}
+    if bet_msg:
+        dice2_kwargs['reply_to_message_id'] = bet_msg.message_id
+    dice2 = await betting_game.bot.send_dice(**dice2_kwargs)
 
     dice1_value = dice1.dice.value
     dice2_value = dice2.dice.value
@@ -545,7 +616,8 @@ async def play_double_dice_game(
     )
 
     text = _build_win_text(nickname, winnings) if is_win else _build_lose_text(nickname)
-    asyncio.create_task(_delayed_safe_reply(dice2, text, delay=3.0))
+    keyboard = _build_replay_keyboard(user_id, bet_type, amount, bet_config)
+    asyncio.create_task(_delayed_safe_reply(dice2, text, delay=3.0, reply_markup=keyboard))
 
 
 async def play_triple_dice_game(
@@ -556,19 +628,25 @@ async def play_triple_dice_game(
     bet_type: str,
     bet_config: dict,
     betting_game: BettingGame,
-    reply_to_message: Message = None,
+    bet_msg: Message = None,
 ):
     send_kwargs = {'chat_id': chat_id, 'emoji': '🎲'}
-    if reply_to_message:
-        send_kwargs['reply_to_message_id'] = reply_to_message.message_id
+    if bet_msg:
+        send_kwargs['reply_to_message_id'] = bet_msg.message_id
 
     dice1 = await betting_game.bot.send_dice(**send_kwargs)
     await asyncio.sleep(2)
-    
-    dice2 = await betting_game.bot.send_dice(chat_id=chat_id, emoji='🎲')
+
+    dice2_kwargs = {'chat_id': chat_id, 'emoji': '🎲'}
+    if bet_msg:
+        dice2_kwargs['reply_to_message_id'] = bet_msg.message_id
+    dice2 = await betting_game.bot.send_dice(**dice2_kwargs)
     await asyncio.sleep(2)
-    
-    dice3 = await betting_game.bot.send_dice(chat_id=chat_id, emoji='🎲')
+
+    dice3_kwargs = {'chat_id': chat_id, 'emoji': '🎲'}
+    if bet_msg:
+        dice3_kwargs['reply_to_message_id'] = bet_msg.message_id
+    dice3 = await betting_game.bot.send_dice(**dice3_kwargs)
 
     dice1_value = dice1.dice.value
     dice2_value = dice2.dice.value
@@ -602,7 +680,8 @@ async def play_triple_dice_game(
     )
 
     text = _build_win_text(nickname, winnings) if is_win else _build_lose_text(nickname)
-    asyncio.create_task(_delayed_safe_reply(dice3, text, delay=3.0))
+    keyboard = _build_replay_keyboard(user_id, bet_type, amount, bet_config)
+    asyncio.create_task(_delayed_safe_reply(dice3, text, delay=3.0, reply_markup=keyboard))
 
 
 async def play_bowling_vs_game(
@@ -613,15 +692,19 @@ async def play_bowling_vs_game(
     bet_type: str,
     bet_config: dict,
     betting_game: BettingGame,
-    reply_to_message: Message = None,
+    bet_msg: Message = None,
 ):
     send_kwargs = {'chat_id': chat_id, 'emoji': '🎳'}
-    if reply_to_message:
-        send_kwargs['reply_to_message_id'] = reply_to_message.message_id
+    if bet_msg:
+        send_kwargs['reply_to_message_id'] = bet_msg.message_id
 
     player_roll = await betting_game.bot.send_dice(**send_kwargs)
     await asyncio.sleep(2)
-    bot_roll = await betting_game.bot.send_dice(chat_id=chat_id, emoji='🎳')
+
+    bot_kwargs = {'chat_id': chat_id, 'emoji': '🎳'}
+    if bet_msg:
+        bot_kwargs['reply_to_message_id'] = bet_msg.message_id
+    bot_roll = await betting_game.bot.send_dice(**bot_kwargs)
     await asyncio.sleep(3)
 
     player_value = player_roll.dice.value
@@ -629,13 +712,13 @@ async def play_bowling_vs_game(
 
     while player_value == bot_value:
         asyncio.create_task(
-            _safe_reply(player_roll, "<tg-emoji emoji-id=\"5402186569006210455\">🎉</tg-emoji>Ничья! Переброс...")
+            _safe_reply(bot_roll, "<tg-emoji emoji-id=\"5402186569006210455\">🎉</tg-emoji>Ничья! Переброс...")
         )
         await asyncio.sleep(1)
 
-        player_roll = await betting_game.bot.send_dice(chat_id=chat_id, emoji='🎳')
+        player_roll = await betting_game.bot.send_dice(**send_kwargs)
         await asyncio.sleep(2)
-        bot_roll    = await betting_game.bot.send_dice(chat_id=chat_id, emoji='🎳')
+        bot_roll    = await betting_game.bot.send_dice(**bot_kwargs)
         await asyncio.sleep(3)
 
         player_value = player_roll.dice.value
@@ -652,10 +735,155 @@ async def play_bowling_vs_game(
         user_id, nickname, amount, is_win, bet_config, betting_game, bet_type=bet_type
     )
 
+    keyboard = _build_replay_keyboard(user_id, bet_type, amount, bet_config)
     if is_win:
-        asyncio.create_task(_safe_reply(bot_roll, _build_win_text(nickname, winnings)))
+        asyncio.create_task(_safe_reply(bot_roll, _build_win_text(nickname, winnings), reply_markup=keyboard))
     else:
-        asyncio.create_task(_safe_reply(bot_roll, _build_lose_text(nickname)))
+        asyncio.create_task(_safe_reply(bot_roll, _build_lose_text(nickname), reply_markup=keyboard))
+
+
+async def _run_game(
+    chat_id: int,
+    user_id: int,
+    nickname: str,
+    amount: float,
+    bet_type: str,
+    bet_config: dict,
+    betting_game: BettingGame,
+    callback: CallbackQuery = None,
+):
+    """Удаляет старое меню (если пришли из callback), отправляет сообщение о ставке
+    и запускает соответствующую игру, кубик(и) которой отвечают на это сообщение."""
+    if callback is not None:
+        try:
+            await callback.message.delete()
+        except Exception as ex:
+            logging.warning(f"[_run_game] Не удалось удалить старое сообщение: {ex}")
+
+    outcome_label = _get_outcome_label(bet_type, bet_config)
+    mult = bet_config.get('multiplier', 0)
+    emoji = _bet_emoji_for(bet_type)
+
+    bet_text = (
+        f"{emoji} <b>{nickname}</b> ставит <code>{amount:.2f}</code>{e(EMOJI_COIN,'💰')} "
+        f"(x{_fmt_mult(mult)}) на «<b>{outcome_label}</b>»"
+    )
+    bet_msg = await betting_game.bot.send_message(chat_id, bet_text, parse_mode='HTML')
+
+    if bet_type.startswith('куб3_'):
+        await play_triple_dice_game(chat_id, user_id, nickname, amount, bet_type, bet_config, betting_game, bet_msg)
+    elif bet_type.startswith('куб2_'):
+        await play_double_dice_game(chat_id, user_id, nickname, amount, bet_type, bet_config, betting_game, bet_msg)
+    elif bet_type.startswith('боулинг_') and bet_config.get('special') == 'bowling_vs':
+        await play_bowling_vs_game(chat_id, user_id, nickname, amount, bet_type, bet_config, betting_game, bet_msg)
+    else:
+        await play_single_dice_game(chat_id, user_id, nickname, amount, bet_type, bet_config, betting_game, bet_msg)
+
+
+async def _execute_and_settle(
+    chat_id: int,
+    user_id: int,
+    nickname: str,
+    amount: float,
+    bet_type: str,
+    bet_config: dict,
+    betting_game: BettingGame,
+    callback: CallbackQuery = None,
+    notify_target=None,
+):
+    """Запускает игру и в случае ошибки возвращает средства, уведомляя пользователя."""
+    try:
+        await _run_game(chat_id, user_id, nickname, amount, bet_type, bet_config, betting_game, callback=callback)
+    except Exception as ex:
+        logging.error(f"Ошибка при отправке кубика (до броска): {ex}")
+        betting_game.add_balance(user_id, amount)
+        try:
+            if notify_target is not None:
+                await notify_target.answer("❌ Не удалось начать игру. Средства возвращены.")
+        except Exception:
+            pass
+    finally:
+        betting_game.end_game(user_id)
+
+
+def _build_nickname(user) -> str:
+    nickname = user.first_name or ""
+    if user.last_name:
+        nickname += f" {user.last_name}"
+    return nickname.strip() or user.username or "Игрок"
+
+
+@router.callback_query(F.data.startswith("replay:"))
+async def handle_replay_bet(callback: CallbackQuery, state: FSMContext):
+    from main import betting_game
+
+    parts = (callback.data or "").split(":")
+    if len(parts) < 5:
+        await callback.answer("❌ Ошибка", show_alert=True)
+        return
+
+    _, uid_str, code, amount_str, target_str = parts[:5]
+
+    if str(callback.from_user.id) != uid_str:
+        await callback.answer("🚫 Это не ваша кнопка!", show_alert=True)
+        return
+
+    user_id = callback.from_user.id
+
+    allowed, wait_time = check_rate_limit(user_id)
+    if not allowed:
+        await callback.answer(f"⏳ Подождите {wait_time:.1f} сек", show_alert=True)
+        return
+
+    if betting_game.is_user_in_game(user_id):
+        await callback.answer("⏳ Дождитесь окончания игры!", show_alert=True)
+        return
+
+    bet_type = CODE_TO_BET_TYPE.get(code)
+    if not bet_type:
+        await callback.answer("❌ Ошибка", show_alert=True)
+        return
+
+    bet_config = betting_game.get_bet_config(bet_type)
+    if not bet_config:
+        await callback.answer("❌ Ошибка конфигурации ставки", show_alert=True)
+        return
+
+    if target_str:
+        try:
+            bet_config['target'] = int(target_str)
+        except ValueError:
+            pass
+
+    try:
+        amount = float(amount_str)
+    except ValueError:
+        await callback.answer("❌ Ошибка суммы", show_alert=True)
+        return
+
+    if amount < MIN_BET or amount > MAX_BET:
+        await callback.answer("❌ Некорректная сумма ставки", show_alert=True)
+        return
+
+    balance = betting_game.get_balance(user_id)
+    if balance < amount:
+        await callback.answer(f"❌ Недостаточно средств! Ваш баланс: {balance:.2f}$", show_alert=True)
+        return
+
+    if not betting_game.subtract_balance(user_id, amount):
+        await callback.answer("❌ Ошибка при снятии средств", show_alert=True)
+        return
+
+    asyncio.create_task(notify_referrer_commission(user_id, amount))
+
+    nickname = _build_nickname(callback.from_user)
+    betting_game.start_game(user_id)
+    await callback.answer()
+
+    await _execute_and_settle(
+        callback.message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game,
+        callback=callback, notify_target=callback.message,
+    )
 
 
 async def handle_text_bet_command(message: Message, betting_game: BettingGame):
@@ -703,39 +931,14 @@ async def handle_text_bet_command(message: Message, betting_game: BettingGame):
 
     asyncio.create_task(notify_referrer_commission(user_id, amount))
 
-    nickname = message.from_user.first_name or ""
-    if message.from_user.last_name:
-        nickname += f" {message.from_user.last_name}"
-    nickname = nickname.strip() or message.from_user.username or "Игрок"
+    nickname = _build_nickname(message.from_user)
 
     betting_game.start_game(user_id)
 
-    try:
-        if bet_type.startswith('куб3_'):
-            await play_triple_dice_game(
-                message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message
-            )
-        elif bet_type.startswith('куб2_'):
-            await play_double_dice_game(
-                message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message
-            )
-        elif bet_type.startswith('боулинг_') and bet_config.get('special') == 'bowling_vs':
-            await play_bowling_vs_game(
-                message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message
-            )
-        else:
-            await play_single_dice_game(
-                message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message
-            )
-    except Exception as e:
-        logging.error(f"Ошибка при отправке кубика (до броска): {e}")
-        betting_game.add_balance(user_id, amount)
-        try:
-            await message.answer("❌ Не удалось начать игру. Средства возвращены.")
-        except Exception:
-            pass
-    finally:
-        betting_game.end_game(user_id)
+    await _execute_and_settle(
+        message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game,
+        callback=None, notify_target=message,
+    )
 
 
 async def safe_edit_message(callback: CallbackQuery, text: str, reply_markup=None, parse_mode=None):
@@ -1183,40 +1386,16 @@ async def request_amount(callback: CallbackQuery, state: FSMContext, betting_gam
 
     asyncio.create_task(notify_referrer_commission(user_id, amount))
 
-    nickname = callback.from_user.first_name or ""
-    if callback.from_user.last_name:
-        nickname += f" {callback.from_user.last_name}"
-    nickname = nickname.strip() or callback.from_user.username or "Игрок"
+    nickname = _build_nickname(callback.from_user)
+    notify_target = callback.message
 
     betting_game.start_game(user_id)
     await callback.answer()
 
-    try:
-        if bet_type.startswith('куб3_'):
-            await play_triple_dice_game(
-                callback.message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game
-            )
-        elif bet_type.startswith('куб2_'):
-            await play_double_dice_game(
-                callback.message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game
-            )
-        elif bet_type.startswith('боулинг_') and bet_config.get('special') == 'bowling_vs':
-            await play_bowling_vs_game(
-                callback.message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game
-            )
-        else:
-            await play_single_dice_game(
-                callback.message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game
-            )
-    except Exception as ex:
-        logging.error(f"Ошибка при отправке кубика (до броска): {ex}")
-        betting_game.add_balance(user_id, amount)
-        try:
-            await callback.message.answer("❌ Не удалось начать игру. Средства возвращены.")
-        except Exception:
-            pass
-    finally:
-        betting_game.end_game(user_id)
+    await _execute_and_settle(
+        callback.message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game,
+        callback=callback, notify_target=notify_target,
+    )
 
 
 async def process_bet_amount(message: Message, state: FSMContext, betting_game: BettingGame):
@@ -1270,42 +1449,18 @@ async def process_bet_amount(message: Message, state: FSMContext, betting_game: 
 
         asyncio.create_task(notify_referrer_commission(user_id, amount))
 
-        nickname = message.from_user.first_name or ""
-        if message.from_user.last_name:
-            nickname += f" {message.from_user.last_name}"
-        nickname = nickname.strip() or message.from_user.username or "Игрок"
+        nickname = _build_nickname(message.from_user)
 
         betting_game.start_game(user_id)
 
-        try:
-            if bet_type.startswith('куб3_'):
-                await play_triple_dice_game(
-                    message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message
-                )
-            elif bet_type.startswith('куб2_'):
-                await play_double_dice_game(
-                    message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message
-                )
-            elif bet_type.startswith('боулинг_') and bet_config.get('special') == 'bowling_vs':
-                await play_bowling_vs_game(
-                    message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message
-                )
-            else:
-                await play_single_dice_game(
-                    message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message
-                )
-        except Exception as e:
-            logging.error(f"Ошибка при отправке кубика (до броска): {e}")
-            betting_game.add_balance(user_id, amount)
-            try:
-                await message.answer("❌ Не удалось начать игру. Средства возвращены.")
-            except Exception:
-                pass
-        finally:
-            if user_id in betting_game.pending_bets:
-                del betting_game.pending_bets[user_id]
-            await state.clear()
-            betting_game.end_game(user_id)
+        if user_id in betting_game.pending_bets:
+            del betting_game.pending_bets[user_id]
+        await state.clear()
+
+        await _execute_and_settle(
+            message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game,
+            callback=None, notify_target=message,
+        )
 
     except ValueError:
         await message.answer("❌ Введите корректное число")
