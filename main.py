@@ -311,12 +311,12 @@ def get_main_menu():
     ])
 
 def get_reply_menu() -> ReplyKeyboardMarkup:
-    """Постоянная reply-клавиатура под полем ввода: Меню | Партнёры | Игры."""
+    """Постоянная reply-клавиатура под полем ввода: Меню | Игры | Партнёры."""
     return ReplyKeyboardMarkup(
         keyboard=[[
             KeyboardButton(text="Меню",     icon_custom_emoji_id=EMOJI_REPLY_MENU),
-            KeyboardButton(text="Партнёры", icon_custom_emoji_id=EMOJI_REPLY_PARTNERS),
             KeyboardButton(text="Игры",     icon_custom_emoji_id=EMOJI_GAMES),
+            KeyboardButton(text="Партнёры", icon_custom_emoji_id=EMOJI_REPLY_PARTNERS),
         ]],
         resize_keyboard=True,
         is_persistent=True
