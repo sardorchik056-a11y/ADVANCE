@@ -74,6 +74,11 @@ EMOJI_GOAL       = "5206607081334906820"
 EMOJI_3POINT     = "5397782960512444700"
 EMOJI_MISS       = "5210952531676504517"
 
+EMOJI_REPLAY     = "5226472688058411001"
+EMOJI_RAISE      = "5224351111653139458"
+EMOJI_LOWER      = "5233410275717198826"
+EMOJI_CHANGE     = "5224490496226797830"
+
 EMOJI_MAGNIFY       = "5231012545799666522"
 EMOJI_BET_LABEL     = "5224380154221995303"
 EMOJI_BALANCE_LABEL = "5224350849660138496"
@@ -296,12 +301,20 @@ def _build_replay_keyboard(user_id: int, bet_type: str, amount: float, bet_confi
     menu_key = _menu_key_for(bet_type)
 
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"🔄 Повторить ({amount:.2f}$)", callback_data=_cb(amount))],
+        [InlineKeyboardButton(
+            text=f"Повторить ({amount:.2f}$)", callback_data=_cb(amount), icon_custom_emoji_id=EMOJI_REPLAY
+        )],
         [
-            InlineKeyboardButton(text=f"📈 x2 ({double_amt:.2f}$)", callback_data=_cb(double_amt)),
-            InlineKeyboardButton(text=f"📉 ÷2 ({half_amt:.2f}$)", callback_data=_cb(half_amt)),
+            InlineKeyboardButton(
+                text=f"x2 ({double_amt:.2f}$)", callback_data=_cb(double_amt), icon_custom_emoji_id=EMOJI_RAISE
+            ),
+            InlineKeyboardButton(
+                text=f"÷2 ({half_amt:.2f}$)", callback_data=_cb(half_amt), icon_custom_emoji_id=EMOJI_LOWER
+            ),
         ],
-        [InlineKeyboardButton(text="🎯 Изменить исход", callback_data=f"backmenu:{user_id}:{menu_key}")],
+        [InlineKeyboardButton(
+            text="Изменить исход", callback_data=f"backmenu:{user_id}:{menu_key}", icon_custom_emoji_id=EMOJI_CHANGE
+        )],
     ])
 
 
@@ -583,9 +596,7 @@ async def _delayed_safe_reply(target_message: Message, text: str, delay: float =
     await _safe_reply(target_message, text, parse_mode=parse_mode, reply_markup=reply_markup)
 
 
-# --- Комиссия проекта: удерживается только с выигрышей ---
-# Пример: ставка 10$, множитель x10 -> валовый выигрыш 100$, комиссия 5% (5$),
-# на баланс зачисляется 95$.
+# Внутренняя комиссия проекта, удерживаемая с выигрышей (не упоминается в текстах пользователю).
 WIN_COMMISSION_RATE = 0.05
 
 
@@ -622,7 +633,7 @@ def _build_win_text(nickname: str, user_id: int, amount: float, outcome_label: s
         f"<blockquote>Ставка: <code>{amount:.2f}</code>{e(EMOJI_COIN,'💰')} на «<b>{outcome_label}</b>»</blockquote>\n"
         f"<blockquote><code>{winnings:.2f}</code>"
         f"{e(EMOJI_COIN,'💰')} "
-        f"Успешно зачислены на баланс! <i>(комиссия {WIN_COMMISSION_RATE*100:.0f}% уже удержана)</i></blockquote>\n"
+        f"Успешно зачислены на баланс!</blockquote>\n"
         f"<blockquote><tg-emoji emoji-id=\"5461151367559141950\">🎉</tg-emoji>"
         f"Поздравляем!</blockquote>"
     )
