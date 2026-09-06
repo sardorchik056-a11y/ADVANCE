@@ -23,7 +23,7 @@ from game import (
     BettingGame, show_dice_menu, show_basketball_menu, show_football_menu,
     show_darts_menu, show_bowling_menu, show_exact_number_menu, request_amount,
     show_games_hub, build_games_hub_text, build_games_hub_keyboard,
-    show_games_selector,
+    show_games_selector, build_games_selector_text, build_games_selector_keyboard,
     cancel_bet, is_bet_command, handle_text_bet_command,
     is_set_bet_command, handle_set_bet_command
 )
@@ -1044,8 +1044,8 @@ async def handle_games_command(message: Message, state: FSMContext):
     _save_username(message.from_user.id, message.from_user.username or "", message.from_user.first_name or "")
     await state.clear()
     sent = await message.answer(
-        build_games_hub_text('dice'),
-        parse_mode=ParseMode.HTML, reply_markup=build_games_hub_keyboard('dice'), disable_web_page_preview=True
+        build_games_selector_text(betting_game, message.from_user.id),
+        parse_mode=ParseMode.HTML, reply_markup=build_games_selector_keyboard(), disable_web_page_preview=True
     )
     _set_msg_owner(sent.message_id, message.from_user.id)
 
