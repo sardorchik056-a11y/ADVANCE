@@ -715,7 +715,7 @@ def build_games_selector_keyboard() -> InlineKeyboardMarkup:
     for key in GAME_TAB_ORDER:
         emoji = GAME_TAB_EMOJI[key]
         mult  = _fmt_mult(GAME_MAX_MULTIPLIER[key])
-        row.append(InlineKeyboardButton(text=f"{emoji} (до x{mult})", callback_data=f"game_{key}"))
+        row.append(InlineKeyboardButton(text=f"{emoji} (до {mult}х)", callback_data=f"game_{key}"))
         if len(row) == 3:
             rows.append(row)
             row = []
