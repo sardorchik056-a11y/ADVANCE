@@ -60,6 +60,14 @@ EMOJI_GOAL       = "5206607081334906820"
 EMOJI_3POINT     = "5397782960512444700"
 EMOJI_MISS       = "5210952531676504517"
 
+EMOJI_MAGNIFY       = "5231012545799666522"  # 🔍 — кнопка "Авторские"
+EMOJI_BET_LABEL     = "5224380154221995303"  # 💰 — подпись "Ставка" на главном экране игр
+EMOJI_BALANCE_LABEL = "5224350849660138496"  # 👛 — подпись "Баланс" на главном экране игр
+EMOJI_CHOOSE_GAME   = "5224708079270013673"  # 🎮 — "Выберите игру..."
+EMOJI_MINES_BTN     = "5226939456514203548"  # 💣 — кнопка "Мины"
+EMOJI_TOWER_BTN     = "5224707005528188746"  # 🏰 — кнопка "Башня"
+EMOJI_GOLD_BTN      = "5226770767378688325"  # 🪙 — кнопка "Золото"
+
 DICE_BET_TYPES = {
     'куб_нечет':   {'name': '🎲 Нечетное',        'values': [1, 3, 5], 'multiplier': 1.9},
     'куб_чет':     {'name': '🎲 Четное',           'values': [2, 4, 6], 'multiplier': 1.9},
@@ -723,11 +731,12 @@ def build_games_selector_keyboard() -> InlineKeyboardMarkup:
         rows.append(row)
 
     rows.append([
-        InlineKeyboardButton(text="💣 Мины",  callback_data="mines_menu"),
-        InlineKeyboardButton(text="🏰 Башня", callback_data="tower_menu"),
+        InlineKeyboardButton(text="Авторские", callback_data="custom_games_menu", icon_custom_emoji_id=EMOJI_MAGNIFY)
     ])
     rows.append([
-        InlineKeyboardButton(text="🪙 Золото", callback_data="gold_menu"),
+        InlineKeyboardButton(text="Мины",   callback_data="mines_menu", icon_custom_emoji_id=EMOJI_MINES_BTN),
+        InlineKeyboardButton(text="Башня",  callback_data="tower_menu", icon_custom_emoji_id=EMOJI_TOWER_BTN),
+        InlineKeyboardButton(text="Золото", callback_data="gold_menu",  icon_custom_emoji_id=EMOJI_GOLD_BTN),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -737,9 +746,9 @@ def build_games_selector_text(betting_game: 'BettingGame', user_id: int) -> str:
     bet_display = f"{current_bet:.2f}" if current_bet else "0"
     balance = betting_game.get_balance(user_id)
     return (
-        f"<blockquote><b>🎮 Выберите игру, на которую хотите сделать ставку!</b></blockquote>\n\n"
-        f"<blockquote>➕ Ставка: <code>{bet_display}</code>{e(EMOJI_COIN,'💰')} $\n"
-        f"💳 Баланс: <code>{balance:.2f}</code>{e(EMOJI_COIN,'💰')} $</blockquote>\n\n"
+        f"<blockquote><b>{e(EMOJI_CHOOSE_GAME,'🎮')} Выберите игру, на которую хотите сделать ставку!</b></blockquote>\n\n"
+        f"<blockquote>{e(EMOJI_BET_LABEL,'💰')} Ставка: <code>{bet_display}</code> $\n"
+        f"{e(EMOJI_BALANCE_LABEL,'👛')} Баланс: <code>{balance:.2f}</code> $</blockquote>\n\n"
     )
 
 
