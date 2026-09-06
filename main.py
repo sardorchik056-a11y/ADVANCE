@@ -919,7 +919,17 @@ async def games_tab_switch(callback: CallbackQuery, state: FSMContext):
         await callback.answer("🚫 Это не ваша кнопка!", show_alert=True); return
     await state.clear()
     active = callback.data.split("_", 1)[1]
-    await show_games_hub(callback, active=active)
+    handler = {
+        'dice':       show_dice_menu,
+        'football':   show_football_menu,
+        'basketball': show_basketball_menu,
+        'darts':      show_darts_menu,
+        'bowling':    show_bowling_menu,
+    }.get(active)
+    if handler:
+        await handler(callback)
+    else:
+        await callback.answer("❌ Ошибка", show_alert=True)
 
 @router.callback_query(F.data == "bet_dice_exact")
 async def exact_number_menu(callback: CallbackQuery, state: FSMContext):
