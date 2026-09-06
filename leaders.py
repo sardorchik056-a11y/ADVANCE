@@ -1,0 +1,425 @@
+import logging
+import sqlite3
+from aiogram import Router, F
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from aiogram.enums import ParseMode
+
+leaders_router = Router()
+
+EMOJI_LEADERS  = "5226892735859961563"  # берём с кнопки "Лидеры" в главном меню
+EMOJI_BACK     = "5233735937317447077"
+EMOJI_TURNOVER = "5233410275717198826"  # 📉
+EMOJI_WIN      = "5224643573156195838"  # 💎
+EMOJI_DEPOSIT  = "5224380154221995303"  # 💰 (как в профиле)
+EMOJI_WITHDRAW = "5224393683368978372"  # 💵 (как в профиле)
+EMOJI_COIN     = "5197434882321567830"
+
+EMOJI_TOP1  = "5226486285924870418"  # 🥇
+EMOJI_TOP2  = "5226739641750693057"  # 🥈
+EMOJI_TOP3  = "5226877982647296615"  # 🥉
+EMOJI_TOP4  = "5224261840757893133"  # 4️⃣
+EMOJI_TOP5  = "5226445737138628746"  # 5️⃣
+EMOJI_TOP6  = "5224218659156699630"  # 6️⃣
+EMOJI_TOP7  = "5224645415697163934"  # 7️⃣
+EMOJI_TOP8  = "5224264026896243346"  # 8️⃣
+EMOJI_TOP9  = "5224733823303984300"  # 9️⃣
+EMOJI_TOP10 = "5226966772506208520"  # 1️⃣ (10 место)
+
+EMOJI_TOP_LIST = [
+    EMOJI_TOP1, EMOJI_TOP2, EMOJI_TOP3, EMOJI_TOP4, EMOJI_TOP5,
+    EMOJI_TOP6, EMOJI_TOP7, EMOJI_TOP8, EMOJI_TOP9, EMOJI_TOP10,
+]
+
+LEADER_TYPES   = ["turnover", "wins", "deposits", "withdrawals"]
+LEADER_PERIODS = ["today", "yesterday", "week", "month"]
+
+TYPE_LABELS = {
+    "turnover":    ("Оборот",   EMOJI_TURNOVER),
+    "wins":        ("Выигрыш",  EMOJI_WIN),
+    "deposits":    ("Депозиты", EMOJI_DEPOSIT),
+    "withdrawals": ("Выводы",   EMOJI_WITHDRAW),
+}
+
+PERIOD_LABELS = {
+    "today":     "Сегодня",
+    "yesterday": "Вчера",
+    "week":      "Неделя",
+    "month":     "Месяц",
+}
+
+DB_PATH = "casino.db"
+
+_stats: dict = {}
+
+def _noop_set_owner(message_id: int, user_id: int): pass
+def _noop_is_owner(message_id: int, user_id: int) -> bool: return True
+
+set_owner_fn = _noop_set_owner
+is_owner_fn  = _noop_is_owner
+
+
+def _resolve_display_name(
+    user_id: int,
+    username: str = "",
+    first_name: str = "",
+    last_name: str = "",
+) -> str:
+    nickname = (first_name or "").strip()
+    if last_name:
+        nickname = f"{nickname} {last_name.strip()}".strip()
+    if nickname:
+        return nickname
+    if username:
+        return username
+    return f"User {user_id}"
+
+
+def _db_connect() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_leaders_db():
+    try:
+        with _db_connect() as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS leaders_stats (
+                    user_id     INTEGER NOT NULL,
+                    date        TEXT    NOT NULL,
+                    name        TEXT    DEFAULT '',
+                    turnover    REAL    DEFAULT 0.0,
+                    wins        REAL    DEFAULT 0.0,
+                    deposits    REAL    DEFAULT 0.0,
+                    withdrawals REAL    DEFAULT 0.0,
+                    PRIMARY KEY (user_id, date)
+                )
+            """)
+            for col in ("deposits", "withdrawals"):
+                try:
+                    conn.execute(f"ALTER TABLE leaders_stats ADD COLUMN {col} REAL DEFAULT 0.0")
+                except Exception:
+                    pass
+            conn.commit()
+        logging.info("[Leaders] Таблица leaders_stats готова.")
+        _load_stats_from_db()
+        sync_names_from_db()
+    except Exception as e:
+        logging.error(f"[Leaders] Ошибка инициализации БД: {e}")
+
+
+def _load_stats_from_db():
+    global _stats
+    try:
+        with _db_connect() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT user_id, date, name, turnover, wins, deposits, withdrawals "
+                "FROM leaders_stats"
+            )
+            rows = cur.fetchall()
+        _stats = {}
+        for row in rows:
+            uid  = int(row["user_id"])
+            date = row["date"]
+            if uid not in _stats:
+                _stats[uid] = {}
+            _stats[uid][date] = {
+                "turnover":    float(row["turnover"]    or 0.0),
+                "wins":        float(row["wins"]        or 0.0),
+                "deposits":    float(row["deposits"]    or 0.0),
+                "withdrawals": float(row["withdrawals"] or 0.0),
+                "name":        row["name"] or f"User {uid}",
+            }
+        logging.info(f"[Leaders] Загружено записей из БД: {len(rows)}")
+    except Exception as e:
+        logging.error(f"[Leaders] Ошибка загрузки stats из БД: {e}")
+
+
+def _save_stat_to_db(user_id: int, date: str):
+    try:
+        day = _stats.get(user_id, {}).get(date)
+        if day is None:
+            return
+        with _db_connect() as conn:
+            conn.execute("""
+                INSERT INTO leaders_stats (user_id, date, name, turnover, wins, deposits, withdrawals)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id, date) DO UPDATE SET
+                    name        = excluded.name,
+                    turnover    = excluded.turnover,
+                    wins        = excluded.wins,
+                    deposits    = excluded.deposits,
+                    withdrawals = excluded.withdrawals
+            """, (
+                user_id, date,
+                day["name"],
+                day["turnover"],
+                day["wins"],
+                day["deposits"],
+                day["withdrawals"],
+            ))
+            conn.commit()
+    except Exception as e:
+        logging.error(f"[Leaders] Ошибка сохранения stat в БД: {e}")
+
+
+def _ensure_day(user_id: int, date: str, name: str = ""):
+    if user_id not in _stats:
+        _stats[user_id] = {}
+    if date not in _stats[user_id]:
+        _stats[user_id][date] = {
+            "turnover": 0.0, "wins": 0.0,
+            "deposits": 0.0, "withdrawals": 0.0,
+            "name": name or f"User {user_id}",
+        }
+    if name:
+        _stats[user_id][date]["name"] = name
+
+
+def sync_names_from_db():
+    try:
+        with _db_connect() as conn:
+            cur = conn.cursor()
+            try:
+                cur.execute("SELECT user_id, first_name, last_name, username FROM users")
+                rows = cur.fetchall()
+                has_last_name = True
+            except Exception:
+                cur.execute("SELECT user_id, first_name, username FROM users")
+                rows = cur.fetchall()
+                has_last_name = False
+
+        updated = 0
+        for row in rows:
+            uid        = int(row["user_id"])
+            first_name = row["first_name"] or ""
+            username   = row["username"]   or ""
+            last_name  = (row["last_name"] or "") if has_last_name else ""
+            display    = _resolve_display_name(uid, username, first_name, last_name)
+            if uid in _stats:
+                for date in _stats[uid]:
+                    _stats[uid][date]["name"] = display
+                updated += 1
+        logging.info(f"[Leaders] Имена синхронизированы из users: {updated} пользователей.")
+    except Exception as e:
+        logging.warning(f"[Leaders] sync_names_from_db пропущен: {e}")
+
+
+def _today_str() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def _dates_for_period(period: str) -> list:
+    from datetime import datetime, timedelta, timezone
+    today = datetime.now(timezone.utc).date()
+    if period == "today":
+        return [str(today)]
+    elif period == "yesterday":
+        return [str(today - timedelta(days=1))]
+    elif period == "week":
+        return [str(today - timedelta(days=i)) for i in range(7)]
+    elif period == "month":
+        return [str(today - timedelta(days=i)) for i in range(30)]
+    return [str(today)]
+
+
+def record_game_result(user_id: int, name: str, bet: float, win: float, game_name: str = ""):
+    """
+    Записывает результат игры в статистику лидеров и в таблицу game_results.
+    game_name — название игры (например 'Дартс', 'Мины', 'Башня', 'Золото' и т.д.)
+    """
+    date = _today_str()
+    _ensure_day(user_id, date, name)
+    _stats[user_id][date]["turnover"] += bet
+    _stats[user_id][date]["wins"]     += win
+    _stats[user_id][date]["name"]      = name
+    _save_stat_to_db(user_id, date)
+
+    _save_to_game_results_sync(user_id, game_name, win)
+
+
+def _save_to_game_results_sync(user_id: int, game_name: str, win_amount: float):
+    try:
+        with _db_connect() as conn:
+            conn.execute("""
+                INSERT INTO game_results (user_id, game_name, win_amount)
+                VALUES (?, ?, ?)
+            """, (user_id, game_name, win_amount))
+            conn.commit()
+    except Exception as e:
+        logging.error(f"[Leaders] Ошибка записи в game_results: {e}")
+
+
+def record_deposit_stat(user_id: int, name: str, amount: float):
+    date = _today_str()
+    _ensure_day(user_id, date, name)
+    _stats[user_id][date]["deposits"] += amount
+    _stats[user_id][date]["name"]      = name
+    _save_stat_to_db(user_id, date)
+    logging.info(f"[Leaders] Депозит записан: user_id={user_id}, amount={amount}, date={date}")
+
+
+def record_withdrawal_stat(user_id: int, name: str, amount: float):
+    date = _today_str()
+    _ensure_day(user_id, date, name)
+    _stats[user_id][date]["withdrawals"] += amount
+    _stats[user_id][date]["name"]         = name
+    _save_stat_to_db(user_id, date)
+    logging.info(f"[Leaders] Вывод записан: user_id={user_id}, amount={amount}, date={date}")
+
+
+def rollback_withdrawal_stat(user_id: int, amount: float):
+    date = _today_str()
+    day  = _stats.get(user_id, {}).get(date)
+    if day is None:
+        return
+    day["withdrawals"] = max(0.0, round(day["withdrawals"] - amount, 8))
+    _save_stat_to_db(user_id, date)
+    logging.info(f"[Leaders] Откат вывода в стате: user_id={user_id}, amount={amount}")
+
+
+def update_user_name(storage, user_id: int, first_name: str):
+    try:
+        user = storage.get_user(user_id)
+        if first_name:
+            user['first_name'] = first_name
+    except Exception:
+        pass
+
+
+def get_top10(storage, leader_type: str, period: str) -> list:
+    if leader_type not in LEADER_TYPES or period not in LEADER_PERIODS:
+        return []
+
+    dates   = _dates_for_period(period)
+    results = {}
+
+    for uid, day_data in _stats.items():
+        total = 0.0
+        name  = f"User {uid}"
+        for d in dates:
+            if d in day_data:
+                total += day_data[d].get(leader_type, 0.0)
+                name   = day_data[d].get("name", name)
+        if total > 0:
+            results[uid] = {"user_id": uid, "name": name, "value": total}
+
+    sorted_list = sorted(results.values(), key=lambda x: x["value"], reverse=True)
+    return sorted_list[:10]
+
+
+def get_leaders_keyboard(active_type: str, active_period: str) -> InlineKeyboardMarkup:
+    def type_btn(t_id: str):
+        label, emoji_id = TYPE_LABELS[t_id]
+        mark = "✦ " if t_id == active_type else ""
+        return InlineKeyboardButton(
+            text=f"{mark}{label}",
+            callback_data=f"leaders:{t_id}:{active_period}",
+            icon_custom_emoji_id=emoji_id
+        )
+
+    def period_btn(p_id: str):
+        mark = "✦ " if p_id == active_period else ""
+        return InlineKeyboardButton(
+            text=f"{mark}{PERIOD_LABELS[p_id]}",
+            callback_data=f"leaders:{active_type}:{p_id}"
+        )
+
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [type_btn("turnover"), type_btn("wins"), type_btn("deposits"), type_btn("withdrawals")],
+        [period_btn("today"), period_btn("yesterday"), period_btn("week"), period_btn("month")],
+        [InlineKeyboardButton(
+            text="Назад",
+            callback_data="back_to_main",
+            icon_custom_emoji_id=EMOJI_BACK
+        )]
+    ])
+
+
+def build_leaders_text(storage, leader_type: str, period: str) -> str:
+    if leader_type not in LEADER_TYPES:
+        leader_type = "turnover"
+    if period not in LEADER_PERIODS:
+        period = "today"
+
+    type_label, type_emoji_id = TYPE_LABELS[leader_type]
+    period_label = PERIOD_LABELS[period]
+    top = get_top10(storage, leader_type, period)
+
+    header = (
+        f'<tg-emoji emoji-id="{EMOJI_LEADERS}">🏆</tg-emoji> '
+        f'<b>Таблица лидеров</b>\n'
+        f'<blockquote>'
+        f'<tg-emoji emoji-id="{type_emoji_id}">⭐</tg-emoji> <b>{type_label}</b> · {period_label}'
+        f'</blockquote>\n\n'
+    )
+
+    if not top:
+        body = '<i>Пока нет данных за выбранный период.</i>\n'
+    else:
+        lines = []
+        for i, entry in enumerate(top, start=1):
+            emoji_id = EMOJI_TOP_LIST[i - 1]
+            lines.append(
+                f'<tg-emoji emoji-id="{emoji_id}">🏅</tg-emoji> '
+                f'<b>{entry["name"]}</b> — '
+                f'<code>{entry["value"]:,.2f}</code>'
+                f'<tg-emoji emoji-id="{EMOJI_COIN}">💰</tg-emoji>'
+            )
+        body = "\n".join(lines) + "\n"
+
+    return header + body
+
+
+async def _edit_menu(message, text: str, reply_markup=None):
+    """Универсально редактирует сообщение меню.
+    Если сообщение с фото (главное меню отправлено через /img) — правит подпись (edit_caption),
+    иначе — правит текст (edit_text). Без этого кнопки под фото-меню падают с ошибкой
+    "there is no text in the message to edit"."""
+    if message.photo:
+        return await message.edit_caption(caption=text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+    return await message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+
+
+async def show_leaders(callback: CallbackQuery, storage_obj):
+    text = build_leaders_text(storage_obj, "turnover", "today")
+    kb   = get_leaders_keyboard("turnover", "today")
+    await _edit_menu(callback.message, text, reply_markup=kb)
+    set_owner_fn(callback.message.message_id, callback.from_user.id)
+    await callback.answer()
+
+
+@leaders_router.callback_query(F.data.startswith("leaders:"))
+async def leaders_switch(callback: CallbackQuery):
+    parts = callback.data.split(":")
+    if len(parts) != 3:
+        await callback.answer()
+        return
+
+    _, leader_type, period = parts
+
+    if leader_type not in LEADER_TYPES or period not in LEADER_PERIODS:
+        await callback.answer("Неверные параметры", show_alert=True)
+        return
+
+    msg_id = callback.message.message_id
+    if not is_owner_fn(msg_id, callback.from_user.id):
+        await callback.answer("🚫 Это не ваша кнопка!", show_alert=True)
+        return
+
+    try:
+        from payments import storage as payment_storage
+    except ImportError:
+        await callback.answer("Ошибка загрузки данных", show_alert=True)
+        return
+
+    try:
+        text = build_leaders_text(payment_storage, leader_type, period)
+        kb   = get_leaders_keyboard(leader_type, period)
+        await _edit_menu(callback.message, text, reply_markup=kb)
+    except Exception as e:
+        logging.error(f"Leaders error: {e}")
+
+    await callback.answer()
