@@ -22,6 +22,7 @@ from payments import (
 from game import (
     BettingGame, show_dice_menu, show_basketball_menu, show_football_menu,
     show_darts_menu, show_bowling_menu, show_exact_number_menu, request_amount,
+    show_games_hub, build_games_hub_text, build_games_hub_keyboard,
     cancel_bet, is_bet_command, handle_text_bet_command
 )
 from mines import (
@@ -859,13 +860,8 @@ async def games_callback(callback: CallbackQuery, state: FSMContext):
         await callback.answer("🚫 Это не ваша кнопка!", show_alert=True)
         return
     await state.clear()
-    await edit_menu(
-        callback.message,
-        get_games_menu_text(callback.from_user.id),
-        reply_markup=get_games_menu(), disable_web_page_preview=True
-    )
+    await show_games_hub(callback, active='dice')
     _set_msg_owner(callback.message.message_id, callback.from_user.id)
-    await callback.answer()
 
 @router.callback_query(F.data == "mines_menu")
 async def mines_menu_callback(callback: CallbackQuery, state: FSMContext):
@@ -894,40 +890,14 @@ async def gold_menu_callback(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     await show_gold_menu(callback, storage, state)
 
-@router.callback_query(F.data == GAME_CALLBACKS['dice'])
-async def dice_menu(callback: CallbackQuery, state: FSMContext):
+@router.callback_query(F.data.startswith("gtab_"))
+async def games_tab_switch(callback: CallbackQuery, state: FSMContext):
     _save_username(callback.from_user.id, callback.from_user.username or "", callback.from_user.first_name or "")
     if not _is_msg_owner(callback.message.message_id, callback.from_user.id):
         await callback.answer("🚫 Это не ваша кнопка!", show_alert=True); return
-    await state.clear(); await show_dice_menu(callback)
-
-@router.callback_query(F.data == GAME_CALLBACKS['basketball'])
-async def basketball_menu(callback: CallbackQuery, state: FSMContext):
-    _save_username(callback.from_user.id, callback.from_user.username or "", callback.from_user.first_name or "")
-    if not _is_msg_owner(callback.message.message_id, callback.from_user.id):
-        await callback.answer("🚫 Это не ваша кнопка!", show_alert=True); return
-    await state.clear(); await show_basketball_menu(callback)
-
-@router.callback_query(F.data == GAME_CALLBACKS['football'])
-async def football_menu(callback: CallbackQuery, state: FSMContext):
-    _save_username(callback.from_user.id, callback.from_user.username or "", callback.from_user.first_name or "")
-    if not _is_msg_owner(callback.message.message_id, callback.from_user.id):
-        await callback.answer("🚫 Это не ваша кнопка!", show_alert=True); return
-    await state.clear(); await show_football_menu(callback)
-
-@router.callback_query(F.data == GAME_CALLBACKS['darts'])
-async def darts_menu(callback: CallbackQuery, state: FSMContext):
-    _save_username(callback.from_user.id, callback.from_user.username or "", callback.from_user.first_name or "")
-    if not _is_msg_owner(callback.message.message_id, callback.from_user.id):
-        await callback.answer("🚫 Это не ваша кнопка!", show_alert=True); return
-    await state.clear(); await show_darts_menu(callback)
-
-@router.callback_query(F.data == GAME_CALLBACKS['bowling'])
-async def bowling_menu(callback: CallbackQuery, state: FSMContext):
-    _save_username(callback.from_user.id, callback.from_user.username or "", callback.from_user.first_name or "")
-    if not _is_msg_owner(callback.message.message_id, callback.from_user.id):
-        await callback.answer("🚫 Это не ваша кнопка!", show_alert=True); return
-    await state.clear(); await show_bowling_menu(callback)
+    await state.clear()
+    active = callback.data.split("_", 1)[1]
+    await show_games_hub(callback, active=active)
 
 @router.callback_query(F.data == "bet_dice_exact")
 async def exact_number_menu(callback: CallbackQuery, state: FSMContext):
@@ -1052,8 +1022,8 @@ async def handle_games_command(message: Message, state: FSMContext):
     _save_username(message.from_user.id, message.from_user.username or "", message.from_user.first_name or "")
     await state.clear()
     sent = await message.answer(
-        get_games_menu_text(message.from_user.id),
-        parse_mode=ParseMode.HTML, reply_markup=get_games_menu(), disable_web_page_preview=True
+        build_games_hub_text('dice'),
+        parse_mode=ParseMode.HTML, reply_markup=build_games_hub_keyboard('dice'), disable_web_page_preview=True
     )
     _set_msg_owner(sent.message_id, message.from_user.id)
 
