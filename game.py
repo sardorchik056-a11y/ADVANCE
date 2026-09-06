@@ -1522,7 +1522,7 @@ def _tabs_row(active: str) -> list:
     return row
 
 
-async def show_basketball_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
+def _build_basketball_menu_content(betting_game: 'BettingGame' = None, user_id: int = 0):
     markup = InlineKeyboardMarkup(inline_keyboard=[
         _tabs_row('basketball'),
         [
@@ -1536,17 +1536,22 @@ async def show_basketball_menu(callback: CallbackQuery, betting_game: 'BettingGa
             InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)
         ]
     ])
-    header = _bet_balance_block(betting_game, callback.from_user.id) if betting_game else ""
-    await safe_edit_message(callback,
+    header = _bet_balance_block(betting_game, user_id) if betting_game else ""
+    text = (
         f"<blockquote><b>🏀 Баскетбол</b></blockquote>\n\n"
         f"{header}"
-        f"<blockquote><b><i>Выберите исход:</i></b></blockquote>\n\n",
-        reply_markup=markup, parse_mode='HTML'
+        f"<blockquote><b><i>Выберите исход:</i></b></blockquote>\n\n"
     )
+    return text, markup
+
+
+async def show_basketball_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
+    text, markup = _build_basketball_menu_content(betting_game, callback.from_user.id)
+    await safe_edit_message(callback, text, reply_markup=markup, parse_mode='HTML')
     await callback.answer()
 
 
-async def show_football_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
+def _build_football_menu_content(betting_game: 'BettingGame' = None, user_id: int = 0):
     markup = InlineKeyboardMarkup(inline_keyboard=[
         _tabs_row('football'),
         [
@@ -1580,17 +1585,22 @@ async def show_football_menu(callback: CallbackQuery, betting_game: 'BettingGame
             InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)
         ]
     ])
-    header = _bet_balance_block(betting_game, callback.from_user.id) if betting_game else ""
-    await safe_edit_message(callback,
+    header = _bet_balance_block(betting_game, user_id) if betting_game else ""
+    text = (
         f"<blockquote><b>⚽ Футбол</b></blockquote>\n\n"
         f"{header}"
-        f"<blockquote><b><i>Выберите исход:</i></b></blockquote>\n\n",
-        reply_markup=markup, parse_mode='HTML'
+        f"<blockquote><b><i>Выберите исход:</i></b></blockquote>\n\n"
     )
+    return text, markup
+
+
+async def show_football_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
+    text, markup = _build_football_menu_content(betting_game, callback.from_user.id)
+    await safe_edit_message(callback, text, reply_markup=markup, parse_mode='HTML')
     await callback.answer()
 
 
-async def show_darts_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
+def _build_darts_menu_content(betting_game: 'BettingGame' = None, user_id: int = 0):
     markup = InlineKeyboardMarkup(inline_keyboard=[
         _tabs_row('darts'),
         [
@@ -1613,17 +1623,22 @@ async def show_darts_menu(callback: CallbackQuery, betting_game: 'BettingGame' =
             InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)
         ]
     ])
-    header = _bet_balance_block(betting_game, callback.from_user.id) if betting_game else ""
-    await safe_edit_message(callback,
+    header = _bet_balance_block(betting_game, user_id) if betting_game else ""
+    text = (
         f"<blockquote><b>🎯 Дартс</b></blockquote>\n\n"
         f"{header}"
-        f"<blockquote><b><i>Выберите исход:</i></b></blockquote>\n\n",
-        reply_markup=markup, parse_mode='HTML'
+        f"<blockquote><b><i>Выберите исход:</i></b></blockquote>\n\n"
     )
+    return text, markup
+
+
+async def show_darts_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
+    text, markup = _build_darts_menu_content(betting_game, callback.from_user.id)
+    await safe_edit_message(callback, text, reply_markup=markup, parse_mode='HTML')
     await callback.answer()
 
 
-async def show_bowling_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
+def _build_bowling_menu_content(betting_game: 'BettingGame' = None, user_id: int = 0):
     markup = InlineKeyboardMarkup(inline_keyboard=[
         _tabs_row('bowling'),
         [
@@ -1637,14 +1652,72 @@ async def show_bowling_menu(callback: CallbackQuery, betting_game: 'BettingGame'
             InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)
         ]
     ])
-    header = _bet_balance_block(betting_game, callback.from_user.id) if betting_game else ""
-    await safe_edit_message(callback,
+    header = _bet_balance_block(betting_game, user_id) if betting_game else ""
+    text = (
         f"<blockquote><b>🎳 Боулинг</b></blockquote>\n\n"
         f"{header}"
-        f"<blockquote><b><i>Выберите исход:</i></b></blockquote>\n\n",
-        reply_markup=markup, parse_mode='HTML'
+        f"<blockquote><b><i>Выберите исход:</i></b></blockquote>\n\n"
     )
+    return text, markup
+
+
+async def show_bowling_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
+    text, markup = _build_bowling_menu_content(betting_game, callback.from_user.id)
+    await safe_edit_message(callback, text, reply_markup=markup, parse_mode='HTML')
     await callback.answer()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Одиночные текстовые команды вида "куб", "дартс", "фут" и т.п. —
+#  открывают соответствующий раздел игры (без исхода и суммы).
+# ─────────────────────────────────────────────────────────────────────────────
+
+GAME_MENU_COMMAND_TO_KEY = {
+    'куб': 'dice', 'dice': 'dice', 'кубик': 'dice', 'cube': 'dice',
+    'фут': 'football', 'fut': 'football', 'foot': 'football',
+    'футбол': 'football', 'football': 'football',
+    'баскет': 'basketball', 'basket': 'basketball', 'basketball': 'basketball',
+    'баскетбол': 'basketball', 'bask': 'basketball',
+    'дартс': 'darts', 'dart': 'darts', 'darts': 'darts', 'дарт': 'darts',
+    'боулинг': 'bowling', 'bowling': 'bowling', 'боул': 'bowling', 'bowl': 'bowling',
+}
+
+
+def _normalize_menu_command(text: str) -> str:
+    t = (text or '').strip().lower()
+    if t.startswith('/'):
+        t = t[1:]
+    return t
+
+
+def is_game_menu_command(text: str) -> bool:
+    if not text:
+        return False
+    return _normalize_menu_command(text) in GAME_MENU_COMMAND_TO_KEY
+
+
+async def handle_game_menu_command(message: Message, betting_game: 'BettingGame'):
+    menu_key = GAME_MENU_COMMAND_TO_KEY.get(_normalize_menu_command(message.text))
+    if not menu_key:
+        return
+
+    user_id = message.from_user.id
+
+    if menu_key == 'dice':
+        text = build_dice_hub_text('1куб', betting_game, user_id)
+        markup = build_dice_hub_keyboard('1куб')
+    elif menu_key == 'football':
+        text, markup = _build_football_menu_content(betting_game, user_id)
+    elif menu_key == 'basketball':
+        text, markup = _build_basketball_menu_content(betting_game, user_id)
+    elif menu_key == 'darts':
+        text, markup = _build_darts_menu_content(betting_game, user_id)
+    elif menu_key == 'bowling':
+        text, markup = _build_bowling_menu_content(betting_game, user_id)
+    else:
+        return
+
+    await message.answer(text, reply_markup=markup, parse_mode='HTML')
 
 
 async def request_amount(callback: CallbackQuery, state: FSMContext, betting_game: BettingGame):
