@@ -885,6 +885,14 @@ async def game_menu_callback(callback: CallbackQuery, state: FSMContext):
     else:
         await callback.answer("❌ Ошибка", show_alert=True)
 
+@router.callback_query(F.data == "custom_games_menu")
+async def custom_games_menu_callback(callback: CallbackQuery, state: FSMContext):
+    _save_username(callback.from_user.id, callback.from_user.username or "", callback.from_user.first_name or "")
+    if not _is_msg_owner(callback.message.message_id, callback.from_user.id):
+        await callback.answer("🚫 Это не ваша кнопка!", show_alert=True)
+        return
+    await callback.answer("🔧 Авторские игры скоро появятся!", show_alert=True)
+
 @router.callback_query(F.data == "mines_menu")
 async def mines_menu_callback(callback: CallbackQuery, state: FSMContext):
     _save_username(callback.from_user.id, callback.from_user.username or "", callback.from_user.first_name or "")
