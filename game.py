@@ -741,14 +741,20 @@ def build_games_selector_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def build_games_selector_text(betting_game: 'BettingGame', user_id: int) -> str:
+def _bet_balance_block(betting_game: 'BettingGame', user_id: int) -> str:
     current_bet = betting_game.get_current_bet(user_id)
     bet_display = f"{current_bet:.2f}" if current_bet else "0"
     balance = betting_game.get_balance(user_id)
     return (
+        f"<blockquote>{e(EMOJI_BET_LABEL,'💰')} Ставка: <code>{bet_display}</code>{e(EMOJI_COIN,'💰')}\n"
+        f"{e(EMOJI_BALANCE_LABEL,'👛')} Баланс: <code>{balance:.2f}</code>{e(EMOJI_COIN,'💰')}</blockquote>\n\n"
+    )
+
+
+def build_games_selector_text(betting_game: 'BettingGame', user_id: int) -> str:
+    return (
         f"<blockquote><b>{e(EMOJI_CHOOSE_GAME,'🎮')} Выберите игру, на которую хотите сделать ставку!</b></blockquote>\n\n"
-        f"<blockquote>{e(EMOJI_BET_LABEL,'💰')} Ставка: <code>{bet_display}</code> $\n"
-        f"{e(EMOJI_BALANCE_LABEL,'👛')} Баланс: <code>{balance:.2f}</code> $</blockquote>\n\n"
+        f"{_bet_balance_block(betting_game, user_id)}"
     )
 
 
@@ -870,7 +876,7 @@ async def show_games_hub(callback: CallbackQuery, active: str = 'dice'):
     await callback.answer()
 
 
-async def show_dice_menu(callback: CallbackQuery):
+async def show_dice_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
     markup = InlineKeyboardMarkup(inline_keyboard=[
         _tabs_row('dice'),
         [
@@ -892,15 +898,17 @@ async def show_dice_menu(callback: CallbackQuery):
             InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)
         ]
     ])
+    header = _bet_balance_block(betting_game, callback.from_user.id) if betting_game else ""
     await safe_edit_message(callback,
         f"<blockquote><b>🎲 Кубик</b></blockquote>\n\n"
+        f"{header}"
         f"<blockquote><b><i>Выберите тип ставки:</i></b></blockquote>\n\n",
         reply_markup=markup, parse_mode='HTML'
     )
     await callback.answer()
 
 
-async def show_exact_number_menu(callback: CallbackQuery):
+async def show_exact_number_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
     markup = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="(x5.7)", callback_data="bet_dice_куб_1", icon_custom_emoji_id="5382322671679708881"),
@@ -916,15 +924,17 @@ async def show_exact_number_menu(callback: CallbackQuery):
             InlineKeyboardButton(text="Назад", callback_data="game_dice", icon_custom_emoji_id=EMOJI_BACK)
         ]
     ])
+    header = _bet_balance_block(betting_game, callback.from_user.id) if betting_game else ""
     await safe_edit_message(callback,
         f"<blockquote><b>{e(EMOJI_NUMBER,'🔢')} Точное число</b></blockquote>\n\n"
+        f"{header}"
         f"<blockquote><b><i>Выберите число:</i></b></blockquote>",
         reply_markup=markup, parse_mode='HTML'
     )
     await callback.answer()
 
 
-async def show_basketball_menu(callback: CallbackQuery):
+async def show_basketball_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
     markup = InlineKeyboardMarkup(inline_keyboard=[
         _tabs_row('basketball'),
         [
@@ -938,15 +948,17 @@ async def show_basketball_menu(callback: CallbackQuery):
             InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)
         ]
     ])
+    header = _bet_balance_block(betting_game, callback.from_user.id) if betting_game else ""
     await safe_edit_message(callback,
         f"<blockquote><b>🏀 Баскетбол</b></blockquote>\n\n"
+        f"{header}"
         f"<blockquote><b><i>Выберите исход:</i></b></blockquote>\n\n",
         reply_markup=markup, parse_mode='HTML'
     )
     await callback.answer()
 
 
-async def show_football_menu(callback: CallbackQuery):
+async def show_football_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
     markup = InlineKeyboardMarkup(inline_keyboard=[
         _tabs_row('football'),
         [
@@ -957,15 +969,17 @@ async def show_football_menu(callback: CallbackQuery):
             InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)
         ]
     ])
+    header = _bet_balance_block(betting_game, callback.from_user.id) if betting_game else ""
     await safe_edit_message(callback,
         f"<blockquote><b>⚽ Футбол</b></blockquote>\n\n"
+        f"{header}"
         f"<blockquote><b><i>Выберите исход:</i></b></blockquote>\n\n",
         reply_markup=markup, parse_mode='HTML'
     )
     await callback.answer()
 
 
-async def show_darts_menu(callback: CallbackQuery):
+async def show_darts_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
     markup = InlineKeyboardMarkup(inline_keyboard=[
         _tabs_row('darts'),
         [
@@ -982,15 +996,17 @@ async def show_darts_menu(callback: CallbackQuery):
             InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)
         ]
     ])
+    header = _bet_balance_block(betting_game, callback.from_user.id) if betting_game else ""
     await safe_edit_message(callback,
         f"<blockquote><b>🎯 Дартс</b></blockquote>\n\n"
+        f"{header}"
         f"<blockquote><b><i>Выберите исход:</i></b></blockquote>\n\n",
         reply_markup=markup, parse_mode='HTML'
     )
     await callback.answer()
 
 
-async def show_bowling_menu(callback: CallbackQuery):
+async def show_bowling_menu(callback: CallbackQuery, betting_game: 'BettingGame' = None):
     markup = InlineKeyboardMarkup(inline_keyboard=[
         _tabs_row('bowling'),
         [
@@ -1004,8 +1020,10 @@ async def show_bowling_menu(callback: CallbackQuery):
             InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)
         ]
     ])
+    header = _bet_balance_block(betting_game, callback.from_user.id) if betting_game else ""
     await safe_edit_message(callback,
         f"<blockquote><b>🎳 Боулинг</b></blockquote>\n\n"
+        f"{header}"
         f"<blockquote><b><i>Выберите исход:</i></b></blockquote>\n\n",
         reply_markup=markup, parse_mode='HTML'
     )
@@ -1036,9 +1054,7 @@ async def request_amount(callback: CallbackQuery, state: FSMContext, betting_gam
     amount = betting_game.get_current_bet(user_id)
     if amount is None:
         await callback.answer(
-            "❌ Ставка не установлена!\n"
-            "Отправьте сумму в чат, например: 0.1$\n"
-            "Действует для всех игр, кроме Мин, Башни и Золота.",
+            "❌ Ставка не установлена!\nОтправьте сумму в чат, например: 0.1$",
             show_alert=True
         )
         return
