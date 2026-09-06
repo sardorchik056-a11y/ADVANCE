@@ -142,10 +142,19 @@ FOOTBALL_BET_TYPES = {
 }
 
 DART_BET_TYPES = {
-    'дартс_белое':   {'values': [3, 5],    'multiplier': 2.35},
-    'дартс_красное': {'values': [2, 4, 6], 'multiplier': 1.9},
-    'дартс_мимо':    {'values': [1],       'multiplier': 5.7},
-    'дартс_центр':   {'values': [6],       'multiplier': 5.7},
+    'дартс_белое':   {'values': [3, 5], 'multiplier': 3.0},
+    # Центр (6) больше не считается красным сектором — это отдельный исход.
+    'дартс_красное': {'values': [2, 4], 'multiplier': 3.0},
+    'дартс_мимо':    {'values': [1],    'multiplier': 6.0},
+    'дартс_центр':   {'values': [6],    'multiplier': 6.0},
+}
+
+# --- ТИПЫ СТАВОК ДЛЯ ДВОЙНОГО ДАРТСА (2 броска подряд, по аналогии с футболом/кубами) ---
+DART_2_BET_TYPES = {
+    'дартс2_дубльбелое':   {'multiplier': 9.0,  'special': 'double_darts_category', 'category': 'дартс_белое'},
+    'дартс2_дублькрасное': {'multiplier': 9.0,  'special': 'double_darts_category', 'category': 'дартс_красное'},
+    'дартс2_дубльцентр':   {'multiplier': 36.0, 'special': 'double_darts_category', 'category': 'дартс_центр'},
+    'дартс2_дубльмимо':    {'multiplier': 36.0, 'special': 'double_darts_category', 'category': 'дартс_мимо'},
 }
 
 BOWLING_BET_TYPES = {
@@ -161,6 +170,7 @@ _BET_TYPE_DISPLAY_NAMES = {
     'баскет_':  'Баскетбол',
     'футбол_':  'Футбол',
     'дартс_':   'Дартс',
+    'дартс2_':  'Дартс (дубль)',
     'боулинг_': 'Боулинг',
 }
 
@@ -187,6 +197,8 @@ BET_TYPE_TO_CODE = {
     'футбол_центр': 'fb_c', 'футбол_девятка': 'fb_9',
     'футбол_любойдубль': 'fb_d', 'футбол_конкретныйдубль': 'fb_sd',
     'дартс_белое': 'dt_w', 'дартс_красное': 'dt_r', 'дартс_мимо': 'dt_m', 'дартс_центр': 'dt_c',
+    'дартс2_дубльбелое': 'dt2_w', 'дартс2_дублькрасное': 'dt2_r',
+    'дартс2_дубльцентр': 'dt2_c', 'дартс2_дубльмимо': 'dt2_m',
     'боулинг_поражение': 'bw_l', 'боулинг_победа': 'bw_w', 'боулинг_страйк': 'bw_s',
 }
 CODE_TO_BET_TYPE = {v: k for k, v in BET_TYPE_TO_CODE.items()}
@@ -205,6 +217,8 @@ _OUTCOME_LABELS = {
     'футбол_штанга': 'Штанга', 'футбол_мимоворот': 'Мимо ворот', 'футбол_угол': 'Гол под углом',
     'футбол_центр': 'Гол в центр', 'футбол_девятка': 'Девятка', 'футбол_любойдубль': 'Любой дубль',
     'дартс_белое': 'Белое', 'дартс_красное': 'Красное', 'дартс_мимо': 'Мимо', 'дартс_центр': 'Центр',
+    'дартс2_дубльбелое': 'Дубль белое', 'дартс2_дублькрасное': 'Дубль красное',
+    'дартс2_дубльцентр': 'Дубль центр', 'дартс2_дубльмимо': 'Дубль мимо',
     'боулинг_поражение': 'Поражение', 'боулинг_победа': 'Победа', 'боулинг_страйк': 'Страйк',
 }
 
@@ -241,7 +255,7 @@ def _bet_emoji_for(bet_type: str) -> str:
         return "🏀"
     elif bet_type.startswith('футбол_'):
         return "⚽"
-    elif bet_type.startswith('дартс_'):
+    elif bet_type.startswith('дартс_') or bet_type.startswith('дартс2_'):
         return "🎯"
     elif bet_type.startswith('боулинг_'):
         return "🎳"
@@ -259,7 +273,7 @@ def _menu_key_for(bet_type: str) -> str:
         return 'basketball'
     elif bet_type.startswith('футбол_'):
         return 'football'
-    elif bet_type.startswith('дартс_'):
+    elif bet_type.startswith('дартс_') or bet_type.startswith('дартс2_'):
         return 'darts'
     elif bet_type.startswith('боулинг_'):
         return 'bowling'
@@ -355,6 +369,18 @@ BET_TYPE_MAPPING = {
     'центр':  'дартс_центр',
     'center': 'дартс_центр',
     'bull':   'дартс_центр',
+    'дубльбелое':   'дартс2_дубльбелое',
+    'дубль_белое':  'дартс2_дубльбелое',
+    'дубльwhite':   'дартс2_дубльбелое',
+    'дублькрасное': 'дартс2_дублькрасное',
+    'дубль_красное': 'дартс2_дублькрасное',
+    'дубльred':     'дартс2_дублькрасное',
+    'дубльцентр':   'дартс2_дубльцентр',
+    'дубль_центр':  'дартс2_дубльцентр',
+    'дубльbull':    'дартс2_дубльцентр',
+    'дубльмимо':    'дартс2_дубльмимо',
+    'дубль_мимо':   'дартс2_дубльмимо',
+    'дубльmiss':    'дартс2_дубльмимо',
     'победа':    'боулинг_победа',
     'win':       'боулинг_победа',
     'victory':   'боулинг_победа',
@@ -414,6 +440,8 @@ class BettingGame:
             return FOOTBALL_BET_TYPES.get(bet_type)
         elif bet_type.startswith('дартс_'):
             return DART_BET_TYPES.get(bet_type)
+        elif bet_type.startswith('дартс2_'):
+            return DART_2_BET_TYPES.get(bet_type)
         elif bet_type.startswith('боулинг_'):
             return BOWLING_BET_TYPES.get(bet_type)
         return None
@@ -555,6 +583,12 @@ async def _delayed_safe_reply(target_message: Message, text: str, delay: float =
     await _safe_reply(target_message, text, parse_mode=parse_mode, reply_markup=reply_markup)
 
 
+# --- Комиссия проекта: удерживается только с выигрышей ---
+# Пример: ставка 10$, множитель x10 -> валовый выигрыш 100$, комиссия 5% (5$),
+# на баланс зачисляется 95$.
+WIN_COMMISSION_RATE = 0.05
+
+
 def _apply_game_result(
     user_id: int,
     nickname: str,
@@ -566,10 +600,14 @@ def _apply_game_result(
 ) -> float:
     game_name = _get_game_display_name(bet_type)
     if is_win:
-        winnings = amount * bet_config['multiplier']
+        gross_winnings = amount * bet_config['multiplier']
+        winnings = round(gross_winnings * (1 - WIN_COMMISSION_RATE), 2)
         betting_game.add_balance(user_id, winnings)
         record_game_result(user_id, nickname, amount, winnings, game_name)
-        logging.info(f"[game] user={user_id} game={game_name} WIN bet={amount} win={winnings:.2f}")
+        logging.info(
+            f"[game] user={user_id} game={game_name} WIN bet={amount} "
+            f"gross={gross_winnings:.2f} commission={WIN_COMMISSION_RATE*100:.0f}% net={winnings:.2f}"
+        )
         return winnings
     else:
         record_game_result(user_id, nickname, amount, 0.0, game_name)
@@ -577,22 +615,24 @@ def _apply_game_result(
         return 0.0
 
 
-def _build_win_text(nickname: str, winnings: float) -> str:
+def _build_win_text(nickname: str, user_id: int, amount: float, outcome_label: str, winnings: float) -> str:
     return (
-        f"<b>{nickname}-Вы выиграли"
+        f"<b>Игрок {nickname} (ID: <code>{user_id}</code>) выигрывает"
         f"<tg-emoji emoji-id=\"5461151367559141950\">🎉</tg-emoji></b>\n\n"
+        f"<blockquote>Ставка: <code>{amount:.2f}</code>{e(EMOJI_COIN,'💰')} на «<b>{outcome_label}</b>»</blockquote>\n"
         f"<blockquote><code>{winnings:.2f}</code>"
         f"{e(EMOJI_COIN,'💰')} "
-        f"Успешно зачислены на баланс!</blockquote>\n"
+        f"Успешно зачислены на баланс! <i>(комиссия {WIN_COMMISSION_RATE*100:.0f}% уже удержана)</i></blockquote>\n"
         f"<blockquote><tg-emoji emoji-id=\"5461151367559141950\">🎉</tg-emoji>"
         f"Поздравляем!</blockquote>"
     )
 
 
-def _build_lose_text(nickname: str) -> str:
+def _build_lose_text(nickname: str, user_id: int, amount: float, outcome_label: str) -> str:
     return (
-        f"<b>{nickname}-Вы проиграли"
+        f"<b>Игрок {nickname} (ID: <code>{user_id}</code>) проигрывает"
         f"<tg-emoji emoji-id=\"5422858869372104873\">❌</tg-emoji></b>\n\n"
+        f"<blockquote>Ставка: <code>{amount:.2f}</code>{e(EMOJI_COIN,'💰')} на «<b>{outcome_label}</b>» — не сыграла.</blockquote>\n"
         f"<blockquote><b><i>Это не повод сдаваться! "
         f"Пробуй снова и снова до победного!</i></b></blockquote>\n"
         f"<blockquote><tg-emoji emoji-id=\"5305699699204837855\">🎉</tg-emoji>"
@@ -624,7 +664,11 @@ async def play_single_dice_game(
         user_id, nickname, amount, is_win, bet_config, betting_game, bet_type=bet_type
     )
 
-    text = _build_win_text(nickname, winnings) if is_win else _build_lose_text(nickname)
+    outcome_label = _get_outcome_label(bet_type, bet_config)
+    text = (
+        _build_win_text(nickname, user_id, amount, outcome_label, winnings)
+        if is_win else _build_lose_text(nickname, user_id, amount, outcome_label)
+    )
     keyboard = _build_replay_keyboard(user_id, bet_type, amount, bet_config)
     asyncio.create_task(_delayed_safe_reply(dice_message, text, delay=3.0, reply_markup=keyboard))
 
@@ -690,7 +734,11 @@ async def play_double_dice_game(
         user_id, nickname, amount, is_win, bet_config, betting_game, bet_type=bet_type
     )
 
-    text = _build_win_text(nickname, winnings) if is_win else _build_lose_text(nickname)
+    outcome_label = _get_outcome_label(bet_type, bet_config)
+    text = (
+        _build_win_text(nickname, user_id, amount, outcome_label, winnings)
+        if is_win else _build_lose_text(nickname, user_id, amount, outcome_label)
+    )
     keyboard = _build_replay_keyboard(user_id, bet_type, amount, bet_config)
     asyncio.create_task(_delayed_safe_reply(dice2, text, delay=3.0, reply_markup=keyboard))
 
@@ -733,9 +781,57 @@ async def play_double_football_game(
         user_id, nickname, amount, is_win, bet_config, betting_game, bet_type=bet_type
     )
 
-    text = _build_win_text(nickname, winnings) if is_win else _build_lose_text(nickname)
+    outcome_label = _get_outcome_label(bet_type, bet_config)
+    text = (
+        _build_win_text(nickname, user_id, amount, outcome_label, winnings)
+        if is_win else _build_lose_text(nickname, user_id, amount, outcome_label)
+    )
     keyboard = _build_replay_keyboard(user_id, bet_type, amount, bet_config)
     asyncio.create_task(_delayed_safe_reply(ball2, text, delay=3.0, reply_markup=keyboard))
+
+
+async def play_double_darts_game(
+    chat_id: int,
+    user_id: int,
+    nickname: str,
+    amount: float,
+    bet_type: str,
+    bet_config: dict,
+    betting_game: BettingGame,
+    bet_msg: Message = None,
+):
+    """Два броска дротика подряд: выигрыш, если ОБА попадания попали в одну
+    и ту же категорию (белое/красное/центр/мимо), по аналогии с дублями в кубах и футболе."""
+    send_kwargs = {'chat_id': chat_id, 'emoji': '🎯'}
+    if bet_msg:
+        send_kwargs['reply_to_message_id'] = bet_msg.message_id
+
+    dart1 = await betting_game.bot.send_dice(**send_kwargs)
+    await asyncio.sleep(2)
+
+    dart2_kwargs = {'chat_id': chat_id, 'emoji': '🎯'}
+    if bet_msg:
+        dart2_kwargs['reply_to_message_id'] = bet_msg.message_id
+    dart2 = await betting_game.bot.send_dice(**dart2_kwargs)
+
+    dart1_value = dart1.dice.value
+    dart2_value = dart2.dice.value
+
+    category = bet_config.get('category', '')
+    category_values = DART_BET_TYPES.get(category, {}).get('values', [])
+    is_win = dart1_value in category_values and dart2_value in category_values
+
+    winnings = _apply_game_result(
+        user_id, nickname, amount, is_win, bet_config, betting_game, bet_type=bet_type
+    )
+
+    outcome_label = _get_outcome_label(bet_type, bet_config)
+    text = (
+        _build_win_text(nickname, user_id, amount, outcome_label, winnings)
+        if is_win else _build_lose_text(nickname, user_id, amount, outcome_label)
+    )
+    keyboard = _build_replay_keyboard(user_id, bet_type, amount, bet_config)
+    asyncio.create_task(_delayed_safe_reply(dart2, text, delay=3.0, reply_markup=keyboard))
 
 
 async def play_triple_dice_game(
@@ -799,7 +895,11 @@ async def play_triple_dice_game(
         user_id, nickname, amount, is_win, bet_config, betting_game, bet_type=bet_type
     )
 
-    text = _build_win_text(nickname, winnings) if is_win else _build_lose_text(nickname)
+    outcome_label = _get_outcome_label(bet_type, bet_config)
+    text = (
+        _build_win_text(nickname, user_id, amount, outcome_label, winnings)
+        if is_win else _build_lose_text(nickname, user_id, amount, outcome_label)
+    )
     keyboard = _build_replay_keyboard(user_id, bet_type, amount, bet_config)
     asyncio.create_task(_delayed_safe_reply(dice3, text, delay=3.0, reply_markup=keyboard))
 
@@ -855,11 +955,16 @@ async def play_bowling_vs_game(
         user_id, nickname, amount, is_win, bet_config, betting_game, bet_type=bet_type
     )
 
+    outcome_label = _get_outcome_label(bet_type, bet_config)
     keyboard = _build_replay_keyboard(user_id, bet_type, amount, bet_config)
     if is_win:
-        asyncio.create_task(_safe_reply(bot_roll, _build_win_text(nickname, winnings), reply_markup=keyboard))
+        asyncio.create_task(_safe_reply(
+            bot_roll, _build_win_text(nickname, user_id, amount, outcome_label, winnings), reply_markup=keyboard
+        ))
     else:
-        asyncio.create_task(_safe_reply(bot_roll, _build_lose_text(nickname), reply_markup=keyboard))
+        asyncio.create_task(_safe_reply(
+            bot_roll, _build_lose_text(nickname, user_id, amount, outcome_label), reply_markup=keyboard
+        ))
 
 
 async def _run_game(
@@ -896,6 +1001,8 @@ async def _run_game(
         await play_double_dice_game(chat_id, user_id, nickname, amount, bet_type, bet_config, betting_game, bet_msg)
     elif bet_type in ('футбол_любойдубль', 'футбол_конкретныйдубль'):
         await play_double_football_game(chat_id, user_id, nickname, amount, bet_type, bet_config, betting_game, bet_msg)
+    elif bet_type.startswith('дартс2_'):
+        await play_double_darts_game(chat_id, user_id, nickname, amount, bet_type, bet_config, betting_game, bet_msg)
     elif bet_type.startswith('боулинг_') and bet_config.get('special') == 'bowling_vs':
         await play_bowling_vs_game(chat_id, user_id, nickname, amount, bet_type, bet_config, betting_game, bet_msg)
     else:
@@ -1156,7 +1263,7 @@ GAME_MAX_MULTIPLIER = {
     'dice':       _max_multiplier({**DICE_BET_TYPES, **DICE_2_BET_TYPES, **DICE_3_BET_TYPES}),
     'football':   _max_multiplier(FOOTBALL_BET_TYPES),
     'basketball': _max_multiplier(BASKETBALL_BET_TYPES),
-    'darts':      _max_multiplier(DART_BET_TYPES),
+    'darts':      _max_multiplier({**DART_BET_TYPES, **DART_2_BET_TYPES}),
     'bowling':    _max_multiplier(BOWLING_BET_TYPES),
 }
 
@@ -1476,12 +1583,20 @@ async def show_darts_menu(callback: CallbackQuery, betting_game: 'BettingGame' =
     markup = InlineKeyboardMarkup(inline_keyboard=[
         _tabs_row('darts'),
         [
-            InlineKeyboardButton(text="Белое (x2.35)", callback_data="bet_darts_дартс_белое"),
-            InlineKeyboardButton(text="Красное (x1.9)", callback_data="bet_darts_дартс_красное")
+            InlineKeyboardButton(text="Белое (x3)", callback_data="bet_darts_дартс_белое"),
+            InlineKeyboardButton(text="Красное (x3)", callback_data="bet_darts_дартс_красное")
         ],
         [
-            InlineKeyboardButton(text="Центр (x5.7)", callback_data="bet_darts_дартс_центр"),
-            InlineKeyboardButton(text="Мимо (x5.7)", callback_data="bet_darts_дартс_мимо")
+            InlineKeyboardButton(text="Центр (x6)", callback_data="bet_darts_дартс_центр"),
+            InlineKeyboardButton(text="Мимо (x6)", callback_data="bet_darts_дартс_мимо")
+        ],
+        [
+            InlineKeyboardButton(text="Дубль белое (x9)", callback_data="bet_darts_дартс2_дубльбелое"),
+            InlineKeyboardButton(text="Дубль красное (x9)", callback_data="bet_darts_дартс2_дублькрасное")
+        ],
+        [
+            InlineKeyboardButton(text="Дубль центр (x36)", callback_data="bet_darts_дартс2_дубльцентр"),
+            InlineKeyboardButton(text="Дубль мимо (x36)", callback_data="bet_darts_дартс2_дубльмимо")
         ],
         [
             InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)
