@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 import uuid
 import asyncio
@@ -104,6 +105,46 @@ try:
     ADMIN_IDS = _MAIN_ADMIN_IDS
 except ImportError:
     ADMIN_IDS = [int(x) for x in os.getenv('ADMIN_IDS', '8118184388, 7552910865').split(',') if x.strip()]
+
+# --- Виртуальная "накрутка" резерва (/addfunds) ----------------------------
+# Хранит условные суммы, которые прибавляются к РЕАЛЬНОМУ балансу казны при
+# отображении в /казна. Реальные деньги на счетах cryptobot/xrocket не
+# трогает — только меняет цифру, которая показывается в /казна.
+_RESERVE_EXTRA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'reserve_extra.json')
+
+
+def _load_reserve_extra() -> dict:
+    try:
+        with open(_RESERVE_EXTRA_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return {
+                'cryptobot': float(data.get('cryptobot', 0.0) or 0.0),
+                'xrocket':   float(data.get('xrocket', 0.0) or 0.0),
+            }
+    except Exception:
+        return {'cryptobot': 0.0, 'xrocket': 0.0}
+
+
+def _save_reserve_extra(data: dict):
+    try:
+        with open(_RESERVE_EXTRA_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logging.error(f"[ReserveExtra] Ошибка сохранения reserve_extra.json: {e}")
+
+
+_reserve_extra = _load_reserve_extra()
+
+
+def get_reserve_extra(provider: str) -> float:
+    return float(_reserve_extra.get(provider, 0.0) or 0.0)
+
+
+def add_reserve_extra(provider: str, amount: float) -> float:
+    _reserve_extra[provider] = round(float(_reserve_extra.get(provider, 0.0) or 0.0) + float(amount), 4)
+    _save_reserve_extra(_reserve_extra)
+    return _reserve_extra[provider]
+
 
 payment_router = Router()
 bot: Bot = None
@@ -1367,6 +1408,11 @@ async def handle_kazna(message: Message):
     usdt_usd  = usdt
     ton_usd   = ton * ton_rate
     trx_usd   = trx * trx_rate
+
+    extra_cryptobot = get_reserve_extra('cryptobot')
+    usdt_usd += extra_cryptobot
+    usdt     += extra_cryptobot
+
     total_usd = usdt_usd + ton_usd + trx_usd
 
     usdt_str = f'USDT-{usdt:.2f} ({usdt_usd:.2f}$)'
@@ -1375,10 +1421,10 @@ async def handle_kazna(message: Message):
 
     xrocket_line   = ''
     xr_total_usd   = 0.0
+    xr_lines       = []
     if XROCKET_API_TOKEN:
         xr_info = await xrocket_api.get_app_info()
         if xr_info and xr_info.get('balances'):
-            xr_lines = []
             for b in xr_info['balances']:
                 cur = (b.get('currency') or '').upper()
                 bal = float(b.get('balance') or 0)
@@ -1394,12 +1440,18 @@ async def handle_kazna(message: Message):
                     xr_lines.append(f'{cur}-{bal:.4f} ({cur_usd:.2f}$)')
                 else:
                     xr_lines.append(f'{cur}-{bal:.4f}')
-            if xr_lines:
-                xrocket_line = (
-                    f'\n<blockquote><b>'
-                    f'{emo(EMOJI_XROCKET,"🚀")}xRocket-{xr_total_usd:.2f}$\n' + '\n'.join(xr_lines) +
-                    f'</b></blockquote>'
-                )
+
+    extra_xrocket = get_reserve_extra('xrocket')
+    if extra_xrocket:
+        xr_total_usd += extra_xrocket
+        xr_lines.append(f'USDT-{extra_xrocket:.4f} ({extra_xrocket:.2f}$)')
+
+    if xr_lines:
+        xrocket_line = (
+            f'\n<blockquote><b>'
+            f'{emo(EMOJI_XROCKET,"🚀")}xRocket-{xr_total_usd:.2f}$\n' + '\n'.join(xr_lines) +
+            f'</b></blockquote>'
+        )
 
     grand_total_usd = total_usd + xr_total_usd
 
@@ -1416,6 +1468,61 @@ async def handle_kazna(message: Message):
         f'{xrocket_line}\n\n'
         f'<b><i><tg-emoji emoji-id="5386367538735104399">💰</tg-emoji>Резерв обновляется в реальном времени!</i></b>',
         parse_mode='HTML'
+    )
+
+
+_ADDFUNDS_RE = _re.compile(r'^/addfunds\s+(xrocket|cryptobot)\s*(-?\d+(?:\.\d+)?)?$', _re.IGNORECASE)
+
+_ADDFUNDS_LABEL = {'xrocket': 'xRocket', 'cryptobot': 'Cryptobot'}
+
+
+@payment_router.message(F.text.regexp(_ADDFUNDS_RE))
+async def handle_addfunds(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        return
+
+    m = _ADDFUNDS_RE.match(message.text.strip())
+    if not m:
+        return
+
+    provider = m.group(1).lower()
+    amount_raw = m.group(2)
+    label = _ADDFUNDS_LABEL.get(provider, provider)
+
+    if amount_raw is None:
+        current = get_reserve_extra(provider)
+        await message.reply(
+            f'<blockquote>💰 <b>{label}</b>: текущая накрутка казны — '
+            f'<code>{current:.2f}</code> USDT\n\n'
+            f'Чтобы добавить: <code>/addfunds {provider} 10</code></blockquote>',
+            parse_mode='HTML'
+        )
+        return
+
+    try:
+        amount = float(amount_raw)
+    except ValueError:
+        await message.reply('❌ Некорректная сумма.', parse_mode='HTML')
+        return
+
+    if amount == 0:
+        await message.reply('❌ Сумма не может быть нулевой.', parse_mode='HTML')
+        return
+
+    new_total = add_reserve_extra(provider, amount)
+    sign = '+' if amount > 0 else ''
+
+    await message.reply(
+        f'<blockquote>✅ <b>Казна {label} обновлена</b>\n'
+        f'├ Изменение: <code>{sign}{amount:.2f}</code> USDT\n'
+        f'└ Текущая накрутка: <code>{new_total:.2f}</code> USDT</blockquote>\n\n'
+        f'<i>Значение виртуальное — реальные средства на счёте не менялись, '
+        f'меняется только то, что показывается в /казна.</i>',
+        parse_mode='HTML'
+    )
+    logging.info(
+        f"[AddFunds] admin={message.from_user.id} provider={provider} "
+        f"delta={amount} new_total={new_total}"
     )
 
 
