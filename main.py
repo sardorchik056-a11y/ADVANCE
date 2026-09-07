@@ -83,7 +83,7 @@ except ImportError:
     def db_get_user(user_id): return {}
     def db_get_user_last_games(user_id, limit=10): return []
 
-BOT_TOKEN = "8651956926:AAG3ML1uGBPQOgrM5WAMl3kXaRLvVxTHCsw"
+BOT_TOKEN = "8313200591:AAHCAkbKqpcYr8l5IPHiaDY08PzaxEAxBR4"
 
 LINK_NEWS     = "https://t.me/egonewsg"
 LINK_CHAT     = "https://t.me/egogruf"
@@ -529,7 +529,11 @@ async def cmd_start(message: Message):
         await message.answer("Произошла ошибка. Попробуйте позже.")
 
 
-@router.message(F.text.startswith("/add") & ~F.text.startswith("/addpromo"))
+@router.message(
+    F.text.startswith("/add")
+    & ~F.text.startswith("/addpromo")
+    & ~F.text.startswith("/addfunds")
+)
 async def cmd_add_balance(message: Message):
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("❌ Нет доступа.")
